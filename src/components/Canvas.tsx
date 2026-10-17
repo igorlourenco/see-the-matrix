@@ -24,8 +24,8 @@ import {
   type Mat2,
   type Vec2,
 } from '../lib/linalg'
-import { I_COLOR, J_COLOR } from '../lib/tex'
 import { useScene } from '../state/store'
+import { usePalette, type Palette } from '../state/theme'
 
 type Drag = { kind: 'basis'; which: 'i' | 'j' } | { kind: 'input'; id: string } | { kind: 'output'; id: string }
 
@@ -43,6 +43,7 @@ export function Canvas() {
   const t = useScene((s) => s.t)
   const vectors = useScene((s) => s.vectors)
   const toggles = useScene((s) => s.toggles)
+  const pal = usePalette()
 
   // Track the container size so the plane always fills the available space.
   useEffect(() => {
@@ -116,9 +117,11 @@ export function Canvas() {
     setDragging(false)
   }
 
+  const origin = S([0, 0])
+
   // ---- Layers, bottom to top -------------------------------------------------
   return (
-    <div ref={wrapRef} className="relative h-full w-full overflow-hidden">
+    <div ref={wrapRef} className="relative h-full w-full overflow-hidden bg-paper">
       <svg
         ref={svgRef}
         width={size.w}
@@ -130,16 +133,21 @@ export function Canvas() {
         role="img"
         aria-label="Coordinate plane showing the transformation"
       >
-        {toggles.originalGrid && <BackgroundGrid S={S} unit={unit} halfExtent={halfExtent} />}
-        {toggles.detArea && <DetArea S={S} M={M} />}
-        <TransformedGrid S={S} M={M} halfExtent={halfExtent} />
-        {toggles.eigen && <EigenLines S={S} A={A} M={M} />}
+        <defs>
+          <Hatch id="hatch-pos" color={pal.detPos} angle={45} />
+          <Hatch id="hatch-neg" color={pal.detNeg} angle={-45} />
+        </defs>
+
+        {toggles.originalGrid && <GraphPaper S={S} unit={unit} halfExtent={halfExtent} pal={pal} />}
+        {toggles.detArea && <DetArea S={S} M={M} pal={pal} />}
+        <TransformedGrid S={S} M={M} halfExtent={halfExtent} pal={pal} />
+        {toggles.eigen && <EigenLines S={S} A={A} M={M} pal={pal} />}
 
         {/* Ghosts: where each vector started (only once the plane has moved). */}
         {moved &&
           vectors.map((v) => (
-            <g key={`ghost-${v.id}`} opacity={0.4}>
-              <Arrow from={S([0, 0])} to={S(v.coords)} color={v.color} width={2} dashed />
+            <g key={`ghost-${v.id}`} opacity={0.45}>
+              <Arrow from={origin} to={S(v.coords)} color={pal.vectors[v.colorIndex]} width={1.75} dashed />
               <Handle at={S(v.coords)} onPointerDown={startDrag({ kind: 'input', id: v.id })} />
             </g>
           ))}
@@ -147,19 +155,20 @@ export function Canvas() {
         {toggles.linComb &&
           vectors.map((v) => (
             <g key={`lc-${v.id}`}>
-              {moved && <LinComb S={S} M={IDENTITY} v={v.coords} opacity={0.3} />}
-              <LinComb S={S} M={M} v={v.coords} opacity={0.9} />
+              {moved && <LinComb S={S} M={IDENTITY} v={v.coords} pal={pal} opacity={0.35} />}
+              <LinComb S={S} M={M} v={v.coords} pal={pal} opacity={0.95} />
             </g>
           ))}
 
         {/* Transformed vectors: A·v */}
         {vectors.map((v) => {
           const tip = S(apply(M, v.coords))
+          const c = pal.vectors[v.colorIndex]
           return (
             <g key={v.id}>
-              <Arrow from={S([0, 0])} to={tip} color={v.color} width={3} />
-              <Label at={tip} from={S([0, 0])} color={v.color}>
-                {v.name}
+              <Arrow from={origin} to={tip} color={c} width={2.5} />
+              <Label at={tip} from={origin} color={c} halo={pal.paper}>
+                <SvgVecName name={v.name} />
               </Label>
               <Handle at={tip} onPointerDown={startDrag({ kind: 'output', id: v.id })} />
             </g>
@@ -169,11 +178,11 @@ export function Canvas() {
         {/* Basis vectors on top: they're the main thing you drag. */}
         {(['i', 'j'] as const).map((which) => {
           const tip = S(M[which])
-          const color = which === 'i' ? I_COLOR : J_COLOR
+          const c = which === 'i' ? pal.ihat : pal.jhat
           return (
             <g key={which}>
-              <Arrow from={S([0, 0])} to={tip} color={color} width={4} />
-              <Label at={tip} from={S([0, 0])} color={color} big>
+              <Arrow from={origin} to={tip} color={c} width={3.25} />
+              <Label at={tip} from={origin} color={c} halo={pal.paper} big>
                 {which === 'i' ? 'î' : 'ĵ'}
               </Label>
               <Handle at={tip} onPointerDown={startDrag({ kind: 'basis', which })} />
@@ -181,18 +190,24 @@ export function Canvas() {
           )
         })}
 
-        <circle cx={cx} cy={cy} r={3.5} fill="#e5e7eb" />
+        <circle cx={origin[0]} cy={origin[1]} r={3} fill={pal.ink} />
       </svg>
 
       {t < 1 && (
-        <div className="pointer-events-none absolute top-3 left-3 rounded bg-black/50 px-2 py-1 font-mono text-xs text-slate-300">
-          showing (1−t)·I + t·A, t = {t.toFixed(2)}
+        <div className="pointer-events-none absolute top-3 left-3 rounded-[3px] border border-rule bg-panel px-2 py-1 font-mono text-xs text-ink-2">
+          (1−t)·I + t·A, t = {t.toFixed(2)}
         </div>
       )}
       <div className="absolute right-3 bottom-3 flex gap-1">
-        <ZoomButton onClick={() => setZoom((z) => Math.min(4, z * 1.25))} label="Zoom in">+</ZoomButton>
-        <ZoomButton onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))} label="Zoom out">−</ZoomButton>
-        <ZoomButton onClick={() => setZoom(1)} label="Reset zoom">⟲</ZoomButton>
+        <ZoomButton onClick={() => setZoom((z) => Math.min(4, z * 1.25))} label="Zoom in">
+          <path d="M7 3v8M3 7h8" />
+        </ZoomButton>
+        <ZoomButton onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))} label="Zoom out">
+          <path d="M3 7h8" />
+        </ZoomButton>
+        <ZoomButton onClick={() => setZoom(1)} label="Reset zoom">
+          <path d="M3.5 7a3.5 3.5 0 1 0 1-2.5M3.5 2.5v2.5H6" />
+        </ZoomButton>
       </div>
     </div>
   )
@@ -204,33 +219,53 @@ type ToScreen = (v: Vec2) => Vec2
 // Grids
 // -----------------------------------------------------------------------------
 
-/** The original, untouched grid: the reference to compare against. */
-function BackgroundGrid({ S, unit, halfExtent }: { S: ToScreen; unit: number; halfExtent: number }) {
+/**
+ * The original, untouched grid, drawn as engineering paper: fine fifth-unit
+ * lines, stronger unit lines, labeled axes. It's the reference to compare against.
+ */
+function GraphPaper({ S, unit, halfExtent, pal }: { S: ToScreen; unit: number; halfExtent: number; pal: Palette }) {
   const n = Math.ceil(halfExtent) + 1
+  const fine = unit >= 40 ? 5 : unit >= 20 ? 2 : 1
   const labelEvery = unit >= 28 ? 1 : unit >= 12 ? 5 : 10
-  const lines: ReactNode[] = []
-  for (let k = -n; k <= n; k++) {
+  const minor: ReactNode[] = []
+  const major: ReactNode[] = []
+  const labels: ReactNode[] = []
+
+  for (let s = -n * fine; s <= n * fine; s++) {
+    const k = s / fine
     const [x1, y1] = S([k, -n])
     const [x2, y2] = S([k, n])
     const [x3, y3] = S([-n, k])
     const [x4, y4] = S([n, k])
-    const stroke = k === 0 ? '#4b5263' : '#1f2430'
-    lines.push(<line key={`v${k}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={1} />)
-    lines.push(<line key={`h${k}`} x1={x3} y1={y3} x2={x4} y2={y4} stroke={stroke} strokeWidth={1} />)
-    if (k !== 0 && k % labelEvery === 0) {
-      const [lx, ly] = S([k, 0])
-      const [mx, my] = S([0, k])
-      lines.push(
-        <text key={`lx${k}`} x={lx} y={ly + 14} fill="#4b5263" fontSize={10} textAnchor="middle">
-          {k}
-        </text>,
-        <text key={`ly${k}`} x={mx - 6} y={my + 3} fill="#4b5263" fontSize={10} textAnchor="end">
-          {k}
-        </text>,
-      )
-    }
+    const target = s % fine === 0 ? major : minor
+    const stroke = s === 0 ? pal.gridAxis : s % fine === 0 ? pal.gridMajor : pal.gridFine
+    target.push(
+      <line key={`v${s}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={1} />,
+      <line key={`h${s}`} x1={x3} y1={y3} x2={x4} y2={y4} stroke={stroke} strokeWidth={1} />,
+    )
   }
-  return <g>{lines}</g>
+  for (let k = -n; k <= n; k++) {
+    if (k === 0 || k % labelEvery !== 0) continue
+    const [lx, ly] = S([k, 0])
+    const [mx, my] = S([0, k])
+    labels.push(
+      <text key={`lx${k}`} x={lx} y={ly + 15} textAnchor="middle">
+        {k}
+      </text>,
+      <text key={`ly${k}`} x={mx - 7} y={my + 3.5} textAnchor="end">
+        {k}
+      </text>,
+    )
+  }
+  return (
+    <g>
+      {minor}
+      {major}
+      <g fill={pal.ink3} fontSize={10} className="font-mono">
+        {labels}
+      </g>
+    </g>
+  )
 }
 
 /**
@@ -241,7 +276,7 @@ function BackgroundGrid({ S, unit, halfExtent }: { S: ToScreen; unit: number; ha
  * k·(new î) + s·(new ĵ): still evenly spaced and parallel, which is exactly
  * what "linear" looks like.
  */
-function TransformedGrid({ S, M, halfExtent }: { S: ToScreen; M: Mat2; halfExtent: number }) {
+function TransformedGrid({ S, M, halfExtent, pal }: { S: ToScreen; M: Mat2; halfExtent: number; pal: Palette }) {
   // If M shrinks space, we need more lines to still cover the screen.
   // |det| / (largest stretch) estimates the smallest stretch factor.
   const largest = Math.hypot(M.i[0], M.i[1], M.j[0], M.j[1])
@@ -251,7 +286,7 @@ function TransformedGrid({ S, M, halfExtent }: { S: ToScreen; M: Mat2; halfExten
   const lines: ReactNode[] = []
   for (let k = -reach; k <= reach; k++) {
     const axis = k === 0
-    const props = { stroke: axis ? '#c9d1e3' : '#3d6fb4', strokeWidth: axis ? 1.6 : 1, strokeOpacity: axis ? 0.9 : 0.55 }
+    const props = { stroke: axis ? pal.warpAxis : pal.warp, strokeWidth: axis ? 1.5 : 1 }
     const [x1, y1] = S(apply(M, [k, -reach]))
     const [x2, y2] = S(apply(M, [k, reach]))
     const [x3, y3] = S(apply(M, [-reach, k]))
@@ -266,34 +301,47 @@ function TransformedGrid({ S, M, halfExtent }: { S: ToScreen; M: Mat2; halfExten
 // Overlays
 // -----------------------------------------------------------------------------
 
+function Hatch({ id, color, angle }: { id: string; color: string; angle: number }) {
+  return (
+    <pattern id={id} width={6} height={6} patternUnits="userSpaceOnUse" patternTransform={`rotate(${angle})`}>
+      <line x1={0} y1={0} x2={0} y2={6} stroke={color} strokeWidth={1.2} strokeOpacity={0.7} />
+    </pattern>
+  )
+}
+
 /**
  * The unit square (area 1) after the transformation: the parallelogram
- * spanned by the new î and ĵ. Its area is |det|.
+ * spanned by the new î and ĵ, hatched like a pencil shading. Its area is |det|;
+ * the hatching flips direction when det < 0.
  */
-function DetArea({ S, M }: { S: ToScreen; M: Mat2 }) {
+function DetArea({ S, M, pal }: { S: ToScreen; M: Mat2; pal: Palette }) {
   const D = det(M)
   const pts = [[0, 0] as Vec2, M.i, add(M.i, M.j), M.j].map(S)
   const center = S(scale(0.5, add(M.i, M.j)))
   const flipped = D < 0
+  const color = flipped ? pal.detNeg : pal.detPos
   return (
     <g>
       <polygon
         points={pts.map((p) => p.join(',')).join(' ')}
-        fill={flipped ? '#ff862f' : '#f4d345'}
-        fillOpacity={0.16}
-        stroke={flipped ? '#ff862f' : '#f4d345'}
-        strokeOpacity={0.5}
+        fill={`url(#${flipped ? 'hatch-neg' : 'hatch-pos'})`}
+        stroke={color}
+        strokeWidth={1.25}
+        strokeLinejoin="round"
       />
       {Math.abs(D) > 0.15 && (
         <text
           x={center[0]}
-          y={center[1] + 4}
-          fill={flipped ? '#ffb27a' : '#f8e38a'}
-          fontSize={12}
+          y={center[1] + 5}
+          fill={color}
+          stroke={pal.paper}
+          strokeWidth={5}
+          paintOrder="stroke"
+          fontSize={15}
           textAnchor="middle"
-          className="font-mono"
+          className="pointer-events-none font-mathrm"
         >
-          {`area ${fmt(D)}`}
+          {flipped ? `area ${fmt(D)} (flipped)` : `area ${fmt(D)}`}
         </text>
       )}
     </g>
@@ -308,9 +356,10 @@ function DetArea({ S, M }: { S: ToScreen; M: Mat2 }) {
  *   M(t)·u = (1−t)·u + t·λ·u = (1 − t + tλ)·u
  * So during the animation the arrow on each line only slides along it.
  */
-function EigenLines({ S, A, M }: { S: ToScreen; A: Mat2; M: Mat2 }) {
+function EigenLines({ S, A, M, pal }: { S: ToScreen; A: Mat2; M: Mat2; pal: Palette }) {
   const e = eigen(A)
   const pairs: EigenPair[] = e.kind === 'distinct' ? e.pairs : e.kind === 'repeated' ? [e.pair] : []
+  const origin = S([0, 0])
   return (
     <g>
       {pairs.map(({ value, vector }, idx) => {
@@ -319,10 +368,13 @@ function EigenLines({ S, A, M }: { S: ToScreen; A: Mat2; M: Mat2 }) {
         const tip = S(apply(M, vector))
         return (
           <g key={idx}>
-            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#e879f9" strokeWidth={1.5} strokeDasharray="6 5" opacity={0.6} />
-            <Arrow from={S([0, 0])} to={tip} color="#e879f9" width={2.5} />
-            <Label at={tip} from={S([0, 0])} color="#e879f9">
-              {`λ=${fmt(value)}`}
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={pal.eigen} strokeWidth={1.25} strokeDasharray="7 5" />
+            <Arrow from={origin} to={tip} color={pal.eigen} width={2.25} />
+            <Label at={tip} from={origin} color={pal.eigen} halo={pal.paper} upright>
+              <tspan className="font-math" fontStyle="italic">
+                λ
+              </tspan>
+              {` = ${fmt(value)}`}
             </Label>
           </g>
         )
@@ -332,13 +384,13 @@ function EigenLines({ S, A, M }: { S: ToScreen; A: Mat2; M: Mat2 }) {
 }
 
 /** v drawn as x·î then y·ĵ, tip to tail: the meaning of coordinates. */
-function LinComb({ S, M, v, opacity }: { S: ToScreen; M: Mat2; v: Vec2; opacity: number }) {
+function LinComb({ S, M, v, pal, opacity }: { S: ToScreen; M: Mat2; v: Vec2; pal: Palette; opacity: number }) {
   const mid = scale(v[0], M.i)
   const end = add(mid, scale(v[1], M.j))
   return (
     <g opacity={opacity}>
-      <Arrow from={S([0, 0])} to={S(mid)} color={I_COLOR} width={2} dashed />
-      <Arrow from={S(mid)} to={S(end)} color={J_COLOR} width={2} dashed />
+      <Arrow from={S([0, 0])} to={S(mid)} color={pal.ihat} width={1.75} dashed />
+      <Arrow from={S(mid)} to={S(end)} color={pal.jhat} width={1.75} dashed />
     </g>
   )
 }
@@ -347,6 +399,7 @@ function LinComb({ S, M, v, opacity }: { S: ToScreen; M: Mat2; v: Vec2; opacity:
 // Primitives (screen coordinates)
 // -----------------------------------------------------------------------------
 
+/** An inked arrow: round-capped shaft and a slim, slightly swept head. */
 function Arrow({ from, to, color, width, dashed }: { from: Vec2; to: Vec2; color: string; width: number; dashed?: boolean }) {
   const dx = to[0] - from[0]
   const dy = to[1] - from[1]
@@ -354,51 +407,87 @@ function Arrow({ from, to, color, width, dashed }: { from: Vec2; to: Vec2; color
   if (len < 1) return null
   const ux = dx / len
   const uy = dy / len
-  const head = Math.min(6 + width * 2.5, len * 0.6) // shrink the head for very short arrows
-  const half = head * 0.55
-  const bx = to[0] - ux * head // base of the arrowhead
+  const head = Math.min(8 + width * 2.6, len * 0.6) // shrink the head for very short arrows
+  const half = head * 0.42
+  const bx = to[0] - ux * head
   const by = to[1] - uy * head
+  const notchX = to[0] - ux * head * 0.78
+  const notchY = to[1] - uy * head * 0.78
   return (
     <g>
       <line
         x1={from[0]}
         y1={from[1]}
-        x2={bx}
-        y2={by}
+        x2={notchX}
+        y2={notchY}
         stroke={color}
         strokeWidth={width}
         strokeLinecap="round"
-        strokeDasharray={dashed ? '5 4' : undefined}
+        strokeDasharray={dashed ? '5 5' : undefined}
       />
-      <polygon
-        points={`${to[0]},${to[1]} ${bx - uy * half},${by + ux * half} ${bx + uy * half},${by - ux * half}`}
+      <path
+        d={`M${to[0]},${to[1]} L${bx - uy * half},${by + ux * half} L${notchX},${notchY} L${bx + uy * half},${by - ux * half} Z`}
         fill={color}
+        stroke={color}
+        strokeWidth={1}
+        strokeLinejoin="round"
       />
     </g>
   )
 }
 
-/** Text just past the arrow's tip, with a dark outline so it reads over the grid. */
-function Label({ at, from, color, big, children }: { at: Vec2; from: Vec2; color: string; big?: boolean; children: ReactNode }) {
+/** Text just past the arrow's tip, with a paper-colored halo so it reads over the grid. */
+function Label({
+  at,
+  from,
+  color,
+  halo,
+  big,
+  upright,
+  children,
+}: {
+  at: Vec2
+  from: Vec2
+  color: string
+  halo: string
+  big?: boolean
+  upright?: boolean
+  children: ReactNode
+}) {
   const dx = at[0] - from[0]
   const dy = at[1] - from[1]
   const len = Math.hypot(dx, dy) || 1
-  const off = big ? 18 : 16
+  const off = big ? 18 : 20
   return (
     <text
       x={at[0] + (dx / len) * off}
       y={at[1] + (dy / len) * off + 5}
       fill={color}
-      fontSize={big ? 18 : 13}
-      fontWeight={600}
+      fontSize={big ? 22 : 19}
+      fontStyle={upright ? 'normal' : 'italic'}
       textAnchor="middle"
-      stroke="#0e1015"
-      strokeWidth={4}
+      stroke={halo}
+      strokeWidth={5}
+      strokeLinejoin="round"
       paintOrder="stroke"
-      className="pointer-events-none"
+      className={`pointer-events-none ${upright ? 'font-mathrm' : 'font-math'}`}
     >
       {children}
     </text>
+  )
+}
+
+/** v1 → v₁ inside SVG text: italic letters, smaller upright digits dropped below the baseline. */
+function SvgVecName({ name }: { name: string }) {
+  const m = /^([A-Za-z]+)_?(\d+)$/.exec(name)
+  if (!m) return <>{name}</>
+  return (
+    <>
+      {m[1]}
+      <tspan className="font-mathrm" fontStyle="normal" fontSize="0.68em" dy="0.3em">
+        {m[2]}
+      </tspan>
+    </>
   )
 }
 
@@ -408,8 +497,8 @@ function Handle({ at, onPointerDown }: { at: Vec2; onPointerDown: (e: ReactPoint
     <circle
       cx={at[0]}
       cy={at[1]}
-      r={13}
-      className="cursor-grab touch-none fill-white/0 transition-colors hover:fill-white/15"
+      r={14}
+      className="cursor-grab touch-none fill-ink/0 transition-colors hover:fill-ink/10"
       onPointerDown={onPointerDown}
     />
   )
@@ -421,9 +510,11 @@ function ZoomButton({ onClick, label, children }: { onClick: () => void; label: 
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="size-8 rounded-md border border-line bg-panel/90 text-slate-300 hover:bg-slate-700"
+      className="grid size-8 place-items-center rounded-[3px] border border-rule bg-panel text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
     >
-      {children}
+      <svg viewBox="0 0 14 14" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {children}
+      </svg>
     </button>
   )
 }

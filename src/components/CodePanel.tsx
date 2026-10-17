@@ -8,7 +8,9 @@
  *     would clobber what they're typing (cursor jumps, comments vanish).
  *     So we skip regeneration when `lastSource === 'code'`.
  */
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { python } from '@codemirror/lang-python'
+import { tags } from '@lezer/highlight'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { useEffect, useRef, useState } from 'react'
 import { generateCode } from '../lib/codegen'
@@ -16,7 +18,33 @@ import { parseCode } from '../lib/parser'
 import type { RunResult } from '../lib/python'
 import { useScene } from '../state/store'
 
-const extensions = [python(), EditorView.lineWrapping]
+const notebookTheme = EditorView.theme({
+  '&': { backgroundColor: 'transparent', color: 'var(--ink)', fontSize: '13px', height: '100%' },
+  '&.cm-focused': { outline: 'none' },
+  '.cm-scroller': { fontFamily: "'JetBrains Mono Variable', ui-monospace, monospace", lineHeight: '1.65' },
+  '.cm-content': { caretColor: 'var(--ink)', padding: '12px 0' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--ink)', borderLeftWidth: '1.5px' },
+  '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--ink-3)', border: 'none', paddingLeft: '8px' },
+  '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--ink)' },
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+    backgroundColor: 'var(--selection) !important',
+  },
+  '.cm-matchingBracket': { backgroundColor: 'var(--selection)', outline: 'none' },
+})
+
+const notebookHighlight = syntaxHighlighting(
+  HighlightStyle.define([
+    { tag: [tags.keyword, tags.controlKeyword, tags.definitionKeyword, tags.moduleKeyword], color: 'var(--code-kw)' },
+    { tag: [tags.number, tags.bool, tags.null], color: 'var(--code-num)' },
+    { tag: tags.string, color: 'var(--code-str)' },
+    { tag: tags.comment, color: 'var(--code-comment)', fontStyle: 'italic' },
+    { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--code-fn)' },
+    { tag: [tags.operator, tags.punctuation, tags.bracket], color: 'var(--ink-2)' },
+  ]),
+)
+
+const extensions = [python(), EditorView.lineWrapping, notebookHighlight]
 const PARSE_DELAY_MS = 250
 
 type RunState = { status: 'idle' | 'running' } | ({ status: 'done' } & RunResult)
@@ -75,8 +103,8 @@ export function CodePanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-line px-4 py-2">
-        <h2 className="text-xs font-semibold tracking-wider text-slate-400 uppercase">NumPy</h2>
+      <div className="flex items-center gap-3 border-b border-rule px-5 py-2.5">
+        <h2 className="font-display text-[15px] font-semibold tracking-tight text-ink">NumPy</h2>
         <SyncBadge error={parseError} />
         <button
           onClick={() => {
@@ -90,16 +118,16 @@ export function CodePanel() {
           Reset
         </button>
         <button onClick={onRun} disabled={run.status === 'running'} className="btn btn-primary">
-          {run.status === 'running' ? 'Running…' : '▶ Run'}
+          {run.status === 'running' ? 'Running…' : 'Run'}
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto text-[13px]">
+      <div className="min-h-0 flex-1 overflow-auto">
         <CodeMirror
           value={doc}
           onChange={onChange}
           extensions={extensions}
-          theme="dark"
+          theme={notebookTheme}
           basicSetup={{ foldGutter: false, highlightActiveLine: false }}
           aria-label="NumPy code"
         />
@@ -112,12 +140,12 @@ export function CodePanel() {
 
 function SyncBadge({ error }: { error: { line: number; error: string } | null }) {
   if (!error) {
-    return <span className="min-w-0 truncate text-xs text-emerald-400/80" title="Edit values in the code to update the scene">
+    return <span className="min-w-0 truncate text-xs text-ok" title="Edit values in the code to update the scene">
         ● live sync
       </span>
   }
   return (
-    <span className="min-w-0 truncate text-xs text-amber-400" title={error.error}>
+    <span className="min-w-0 truncate text-xs text-err" title={error.error}>
       ● line {error.line}: {error.error}
     </span>
   )
@@ -126,18 +154,18 @@ function SyncBadge({ error }: { error: { line: number; error: string } | null })
 function Output({ run }: { run: RunState }) {
   if (run.status === 'idle') {
     return (
-      <p className="border-t border-line px-4 py-2 text-xs text-slate-500">
+      <p className="border-t border-rule px-5 py-2.5 text-xs text-ink-3">
         Press Run to execute this in real Python (Pyodide). The first run downloads ~10 MB.
       </p>
     )
   }
   if (run.status !== 'done') {
-    return <p className="border-t border-line px-4 py-2 text-xs text-slate-400">Starting Python + NumPy…</p>
+    return <p className="border-t border-rule px-5 py-2.5 text-xs text-ink-2">Starting Python + NumPy…</p>
   }
   return (
-    <pre className="max-h-48 overflow-auto border-t border-line bg-black/30 px-4 py-2 font-mono text-xs leading-relaxed text-slate-300">
+    <pre className="max-h-48 overflow-auto border-t border-rule bg-sunken px-5 py-2.5 font-mono text-xs leading-relaxed text-ink">
       {run.output}
-      {run.error && <span className="text-rose-400">{run.error}</span>}
+      {run.error && <span className="text-err">{run.error}</span>}
     </pre>
   )
 }

@@ -29,7 +29,8 @@ export interface VectorItem {
   name: string
   /** Coordinates in the ORIGINAL basis: "how much î, how much ĵ". */
   coords: Vec2
-  color: string
+  /** Slot in the theme's vector palette (--vec-1 … --vec-6). */
+  colorIndex: number
 }
 
 export interface Toggles {
@@ -67,15 +68,16 @@ interface Actions {
   toggle: (key: keyof Toggles) => void
 }
 
-export const VECTOR_COLORS = ['#f4d345', '#58c4dd', '#c08cf0', '#ff862f', '#5cd0b3', '#f49ac1']
+export const VECTOR_COLOR_COUNT = 6
 
 let nextId = 1
 const newId = () => `vec-${nextId++}`
 
 /** First palette color not already used, so vectors stay distinguishable. */
-function pickColor(taken: readonly VectorItem[]): string {
-  const used = new Set(taken.map((v) => v.color))
-  return VECTOR_COLORS.find((c) => !used.has(c)) ?? VECTOR_COLORS[taken.length % VECTOR_COLORS.length]
+function pickColor(taken: readonly VectorItem[]): number {
+  const used = new Set(taken.map((v) => v.colorIndex))
+  for (let k = 0; k < VECTOR_COLOR_COUNT; k++) if (!used.has(k)) return k
+  return taken.length % VECTOR_COLOR_COUNT
 }
 
 /** v1, v2, ... skipping names in use. Names must be valid Python identifiers. */
@@ -87,8 +89,8 @@ function nextName(vectors: readonly VectorItem[]): string {
 }
 
 const initialVectors: VectorItem[] = [
-  { id: newId(), name: 'v1', coords: [2, 3], color: VECTOR_COLORS[0] },
-  { id: newId(), name: 'v2', coords: [-2, 1], color: VECTOR_COLORS[1] },
+  { id: newId(), name: 'v1', coords: [2, 3], colorIndex: 0 },
+  { id: newId(), name: 'v2', coords: [-2, 1], colorIndex: 1 },
 ]
 
 export const useScene = create<SceneState & Actions>()((set) => ({
@@ -113,7 +115,7 @@ export const useScene = create<SceneState & Actions>()((set) => ({
 
   addVector: (coords) =>
     set((s) => ({
-      vectors: [...s.vectors, { id: newId(), name: nextName(s.vectors), coords, color: pickColor(s.vectors) }],
+      vectors: [...s.vectors, { id: newId(), name: nextName(s.vectors), coords, colorIndex: pickColor(s.vectors) }],
       lastSource: 'inputs',
     })),
 
@@ -133,7 +135,7 @@ export const useScene = create<SceneState & Actions>()((set) => ({
       const next: VectorItem[] = []
       for (const { name, coords } of vectors) {
         const existing = kept.find((v) => v.name === name)
-        next.push(existing ? { ...existing, coords } : { id: newId(), name, coords, color: pickColor([...kept, ...next]) })
+        next.push(existing ? { ...existing, coords } : { id: newId(), name, coords, colorIndex: pickColor([...kept, ...next]) })
       }
       return {
         A: { i: basis.i ?? s.A.i, j: basis.j ?? s.A.j },

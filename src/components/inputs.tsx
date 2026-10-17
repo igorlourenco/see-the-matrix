@@ -38,7 +38,7 @@ export function NumberField({ value, onCommit, label }: { value: number; onCommi
       }}
       onBlur={() => setText(fmt(value, 4))}
       onKeyDown={onKeyDown}
-      className="w-14 rounded bg-transparent px-1 py-0.5 text-center font-mono text-sm text-slate-100 outline-none hover:bg-white/5 focus:bg-white/10"
+      className="w-14 rounded-[3px] bg-transparent px-1 py-0.5 text-center font-mono text-sm text-ink tabular-nums outline-none hover:bg-ink/5 focus:bg-ink/8"
     />
   )
 }
@@ -78,12 +78,29 @@ export function ColumnReadout({ value, color }: { value: Vec2; color: string }) 
   )
 }
 
+/** A vector name typeset like the math panel: italic letters, upright subscript digits (v1 → v₁). */
+export function VecName({ name }: { name: string }) {
+  const m = /^([A-Za-z]+)_?(\d+)$/.exec(name)
+  return (
+    <span className="font-math italic">
+      {m ? (
+        <>
+          {m[1]}
+          <sub className="font-mathrm text-[0.68em] not-italic">{m[2]}</sub>
+        </>
+      ) : (
+        name
+      )}
+    </span>
+  )
+}
+
 export function Section({ title, hint, children }: { title: string; hint?: ReactNode; children: ReactNode }) {
   return (
-    <section className="border-b border-line px-4 py-4">
-      <h2 className="text-xs font-semibold tracking-wider text-slate-400 uppercase">{title}</h2>
-      {hint && <p className="mt-1 text-xs leading-relaxed text-slate-500">{hint}</p>}
-      <div className="mt-3">{children}</div>
+    <section className="border-b border-rule px-5 pt-5 pb-6">
+      <h2 className="font-display text-[15px] font-semibold tracking-tight text-ink">{title}</h2>
+      {hint && <p className="mt-1 max-w-[46ch] text-[13px] leading-snug text-ink-2">{hint}</p>}
+      <div className="mt-4">{children}</div>
     </section>
   )
 }

@@ -1,9 +1,14 @@
+import type { ReactNode } from 'react'
 import { Canvas } from './components/Canvas'
 import { CodePanel } from './components/CodePanel'
 import { MathPanel } from './components/MathPanel'
-import { Sidebar } from './components/Sidebar'
+import { Tex } from './components/Tex'
+import { PlayIcon, Sidebar } from './components/Sidebar'
+import { matApprox } from './lib/linalg'
 import { PRESETS } from './lib/presets'
+import { ihat, jhat } from './lib/tex'
 import { useScene, type Toggles } from './state/store'
+import { toHex, usePalette, useTheme, type ThemeMode } from './state/theme'
 import { useAnimation } from './state/useAnimation'
 
 /**
@@ -24,10 +29,10 @@ export function App() {
           <Controls />
         </div>
         {/* md: one scrolling column on the right. xl: `contents` lets both children become their own grid columns. */}
-        <div className="flex min-w-0 flex-col bg-panel md:min-h-0 md:overflow-y-auto md:border-l md:border-line xl:contents">
+        <div className="flex min-w-0 flex-col bg-panel md:min-h-0 md:overflow-y-auto md:border-l md:border-rule xl:contents">
           <Sidebar />
-          <div className="flex min-w-0 flex-col bg-panel xl:col-start-3 xl:row-start-1 xl:min-h-0 xl:border-l xl:border-line">
-            <div className="border-b border-line xl:min-h-0 xl:flex-[1.2] xl:overflow-y-auto">
+          <div className="flex min-w-0 flex-col bg-panel xl:col-start-3 xl:row-start-1 xl:min-h-0 xl:border-l xl:border-rule">
+            <div className="border-b border-rule xl:min-h-0 xl:flex-[1.2] xl:overflow-y-auto">
               <MathPanel />
             </div>
             <div className="h-[480px] xl:h-auto xl:min-h-0 xl:flex-1">
@@ -42,22 +47,73 @@ export function App() {
 
 function Header() {
   const applyPreset = useScene((s) => s.applyPreset)
+  const A = useScene((s) => s.A)
+  const pal = usePalette()
   return (
-    <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line px-4 py-2.5">
-      <h1 className="text-base font-semibold tracking-tight text-slate-100">
+    <header className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b border-rule bg-paper px-5 py-3">
+      <h1 className="flex items-center gap-3 font-display text-xl font-bold tracking-tight text-ink">
         See the Matrix
-        <span className="ml-2 font-normal text-slate-500">
-          A = [ <span className="text-ihat">î</span> <span className="text-jhat">ĵ</span> ]
+        <span className="text-[15px] font-normal tracking-normal text-ink-2">
+          <Tex tex={`A = \\begin{bmatrix} ${ihat(toHex(pal.ihat))} & ${jhat(toHex(pal.jhat))} \\end{bmatrix}`} />
         </span>
       </h1>
-      <nav className="flex max-w-full gap-1.5 overflow-x-auto md:flex-wrap" aria-label="Presets">
+      <nav className="order-last flex max-w-full items-center gap-1.5 overflow-x-auto md:order-none md:flex-wrap" aria-label="Presets">
         {PRESETS.map((p) => (
-          <button key={p.id} onClick={() => applyPreset(p.id)} className="btn">
+          <button key={p.id} onClick={() => applyPreset(p.id)} aria-pressed={matApprox(A, p.matrix)} className="btn">
             {p.label}
           </button>
         ))}
       </nav>
+      <ThemeSwitch />
     </header>
+  )
+}
+
+const THEME_OPTIONS: { mode: ThemeMode; label: string; icon: ReactNode }[] = [
+  {
+    mode: 'system',
+    label: 'Match system',
+    icon: (
+      <>
+        <rect x="1.5" y="2.5" width="11" height="7.5" rx="1" />
+        <path d="M5 12.5h4" />
+      </>
+    ),
+  },
+  {
+    mode: 'light',
+    label: 'Light',
+    icon: (
+      <>
+        <circle cx="7" cy="7" r="2.5" />
+        <path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.8 2.8l1 1M10.2 10.2l1 1M2.8 11.2l1-1M10.2 3.8l1-1" />
+      </>
+    ),
+  },
+  { mode: 'dark', label: 'Dark', icon: <path d="M11.5 8.5A5 5 0 0 1 5.5 2.5a5 5 0 1 0 6 6z" /> },
+]
+
+function ThemeSwitch() {
+  const mode = useTheme((s) => s.mode)
+  const setMode = useTheme((s) => s.setMode)
+  return (
+    <div role="radiogroup" aria-label="Theme" className="ml-auto flex rounded-[3px] border border-rule p-0.5">
+      {THEME_OPTIONS.map((o) => (
+        <button
+          key={o.mode}
+          role="radio"
+          aria-checked={mode === o.mode}
+          aria-label={o.label}
+          title={o.label}
+          onClick={() => setMode(o.mode)}
+          className="grid size-7 place-items-center rounded-[2px] text-ink-3 transition-colors hover:text-ink aria-checked:bg-ink aria-checked:text-paper"
+        >
+          <svg viewBox="0 0 14 14" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            {o.icon}
+          </svg>
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -79,12 +135,12 @@ function Controls() {
   const toggle = useScene((s) => s.toggle)
 
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-panel px-4 py-2.5">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-rule bg-panel px-5 py-3">
+      <div className="flex items-center gap-2.5">
         <button onClick={replay} className="btn" title="Animate from the identity to A">
-          ▶ Replay
+          <PlayIcon /> Replay
         </button>
-        <span className="font-mono text-xs text-slate-500">I</span>
+        <span className="font-mono text-xs text-ink-3">I</span>
         <input
           type="range"
           min={0}
@@ -93,26 +149,24 @@ function Controls() {
           value={t}
           onChange={(e) => setT(Number(e.target.value))}
           aria-label="Animation progress from identity to A"
-          className="w-36 accent-sky-400"
+          className="w-36 accent-ink"
         />
-        <span className="font-mono text-xs text-slate-500">A</span>
+        <span className="font-mono text-xs text-ink-3">A</span>
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
+        <legend className="sr-only">Show on the canvas</legend>
         {TOGGLES.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => toggle(key)}
-            aria-pressed={toggles[key]}
-            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-              toggles[key]
-                ? 'border-sky-400/60 bg-sky-400/15 text-sky-200'
-                : 'border-line text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            {label}
-          </button>
+          <label key={key} className="group inline-flex cursor-pointer items-center gap-1.5 text-xs text-ink-2 select-none hover:text-ink">
+            <input type="checkbox" checked={toggles[key]} onChange={() => toggle(key)} className="peer sr-only" />
+            <span className="grid size-3.5 place-items-center rounded-[2px] border border-ink-3 text-paper transition-colors group-hover:border-ink peer-checked:border-ink peer-checked:bg-ink peer-focus-visible:outline-[1.5px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink peer-focus-visible:outline-solid">
+              <svg viewBox="0 0 10 10" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M2 5.2l2 2L8 3" />
+              </svg>
+            </span>
+            <span className="peer-checked:text-ink">{label}</span>
+          </label>
         ))}
-      </div>
+      </fieldset>
     </div>
   )
 }

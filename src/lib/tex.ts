@@ -1,17 +1,14 @@
-/** Small helpers for building KaTeX strings. */
+/** Small helpers for building KaTeX strings. Colors must be hex (KaTeX rejects oklch). */
 import { fmt } from './format'
 import type { Mat2, Vec2 } from './linalg'
-
-export const I_COLOR = '#83c167'
-export const J_COLOR = '#fc6255'
 
 export const color = (hex: string, tex: string) => `\\textcolor{${hex}}{${tex}}`
 export const n = (x: number) => fmt(x)
 /** Wrap negatives in parentheses when they're multiplied: 2·(−1), not 2·−1. */
 export const p = (x: number) => (x < 0 ? `(${fmt(x)})` : fmt(x))
 
-export const IHAT = color(I_COLOR, '\\hat{\\imath}')
-export const JHAT = color(J_COLOR, '\\hat{\\jmath}')
+export const ihat = (hex: string) => color(hex, '\\hat{\\imath}')
+export const jhat = (hex: string) => color(hex, '\\hat{\\jmath}')
 
 export const col = (v: Vec2, hex?: string) => {
   const tex = `\\begin{bmatrix} ${n(v[0])} \\\\ ${n(v[1])} \\end{bmatrix}`
@@ -19,9 +16,9 @@ export const col = (v: Vec2, hex?: string) => {
 }
 
 /** A with its columns colored like î and ĵ on the canvas. */
-export const matrix = (A: Mat2, colored = true) => {
-  const ci = (x: number) => (colored ? color(I_COLOR, n(x)) : n(x))
-  const cj = (x: number) => (colored ? color(J_COLOR, n(x)) : n(x))
+export const matrix = (A: Mat2, colors?: { i: string; j: string }) => {
+  const ci = (x: number) => (colors ? color(colors.i, n(x)) : n(x))
+  const cj = (x: number) => (colors ? color(colors.j, n(x)) : n(x))
   return `\\begin{bmatrix} ${ci(A.i[0])} & ${cj(A.j[0])} \\\\ ${ci(A.i[1])} & ${cj(A.j[1])} \\end{bmatrix}`
 }
 

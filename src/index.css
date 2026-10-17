@@ -1,12 +1,100 @@
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/public-sans';
+@import '@fontsource-variable/jetbrains-mono';
 @import 'tailwindcss';
 
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Light: cream engineering paper, blue graph lines, blue-black ink. */
+:root {
+  color-scheme: light;
+  --paper: oklch(0.975 0.014 88);
+  --panel: oklch(0.958 0.016 88);
+  --sunken: oklch(0.938 0.018 88);
+  --rule: oklch(0.87 0.026 225);
+  --grid-fine: oklch(0.925 0.026 225);
+  --grid-major: oklch(0.86 0.042 228);
+  --grid-axis: oklch(0.66 0.05 238);
+  --warp: oklch(0.36 0.07 262 / 0.4);
+  --warp-axis: oklch(0.27 0.04 262 / 0.9);
+  --ink: oklch(0.27 0.04 262);
+  --ink-2: oklch(0.44 0.035 258);
+  --ink-3: oklch(0.6 0.028 250);
+  --ihat: oklch(0.52 0.14 150);
+  --jhat: oklch(0.55 0.19 27);
+  --eigen: oklch(0.52 0.17 340);
+  --det-pos: oklch(0.62 0.13 72);
+  --det-neg: oklch(0.55 0.19 27);
+  --vec-1: oklch(0.6 0.13 70);
+  --vec-2: oklch(0.5 0.12 245);
+  --vec-3: oklch(0.5 0.15 295);
+  --vec-4: oklch(0.52 0.09 190);
+  --vec-5: oklch(0.58 0.15 48);
+  --vec-6: oklch(0.42 0.03 262);
+  --ok: oklch(0.5 0.12 150);
+  --err: oklch(0.52 0.19 27);
+  --selection: oklch(0.86 0.06 225 / 0.7);
+  --code-kw: oklch(0.45 0.14 262);
+  --code-num: oklch(0.54 0.18 27);
+  --code-str: oklch(0.5 0.12 150);
+  --code-fn: oklch(0.47 0.14 300);
+  --code-comment: oklch(0.56 0.03 250);
+}
+
+/* Dark: a black notebook, white gel-pen ink, same pencil colors. */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: oklch(0.165 0.004 85);
+  --panel: oklch(0.19 0.004 85);
+  --sunken: oklch(0.145 0.004 85);
+  --rule: oklch(0.29 0.005 85);
+  --grid-fine: oklch(0.205 0.004 85);
+  --grid-major: oklch(0.26 0.005 85);
+  --grid-axis: oklch(0.44 0.006 85);
+  --warp: oklch(0.88 0.01 85 / 0.3);
+  --warp-axis: oklch(0.93 0.01 85 / 0.85);
+  --ink: oklch(0.93 0.01 85);
+  --ink-2: oklch(0.74 0.01 85);
+  --ink-3: oklch(0.58 0.01 85);
+  --ihat: oklch(0.82 0.15 145);
+  --jhat: oklch(0.72 0.16 27);
+  --eigen: oklch(0.76 0.14 340);
+  --det-pos: oklch(0.86 0.12 90);
+  --det-neg: oklch(0.72 0.16 27);
+  --vec-1: oklch(0.87 0.13 92);
+  --vec-2: oklch(0.77 0.1 240);
+  --vec-3: oklch(0.75 0.13 295);
+  --vec-4: oklch(0.8 0.1 185);
+  --vec-5: oklch(0.78 0.14 55);
+  --vec-6: oklch(0.82 0.015 85);
+  --ok: oklch(0.8 0.13 150);
+  --err: oklch(0.74 0.15 27);
+  --selection: oklch(0.4 0.02 85 / 0.8);
+  --code-kw: oklch(0.8 0.1 240);
+  --code-num: oklch(0.86 0.12 90);
+  --code-str: oklch(0.8 0.12 150);
+  --code-fn: oklch(0.78 0.11 300);
+  --code-comment: oklch(0.6 0.01 85);
+}
+
 @theme {
-  /* 3Blue1Brown's convention: î is green, ĵ is red. */
-  --color-ihat: #83c167;
-  --color-jhat: #fc6255;
-  --color-ink: #0e1015;
-  --color-panel: #151821;
-  --color-line: #262b38;
+  --font-sans: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque Variable', 'Public Sans Variable', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  --font-math: 'KaTeX_Math', 'STIX Two Math', 'Cambria Math', 'Times New Roman', serif;
+  --font-mathrm: 'KaTeX_Main', 'STIX Two Text', 'Cambria', 'Times New Roman', serif;
+
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-sunken: var(--sunken);
+  --color-rule: var(--rule);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ihat: var(--ihat);
+  --color-jhat: var(--jhat);
+  --color-ok: var(--ok);
+  --color-err: var(--err);
 }
 
 html,
@@ -16,38 +104,45 @@ body,
 }
 
 body {
-  background: var(--color-ink);
-  color: #d7dbe4;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+
+:focus-visible {
+  outline: 1.5px solid var(--ink);
+  outline-offset: 2px;
 }
 
 .katex {
   font-size: 1.05em;
 }
 
-/* KaTeX display blocks overflow on narrow panels: scroll instead of clipping. */
 .katex-display {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 2px 0;
-  margin: 0.4em 0;
+  margin: 0.5em 0;
 }
 
 @layer components {
   .btn {
-    @apply rounded-md border border-line bg-white/5 px-2.5 py-1 text-xs font-medium whitespace-nowrap text-slate-200 transition-colors hover:bg-white/10 disabled:opacity-50;
+    @apply inline-flex items-center gap-1.5 rounded-[3px] border border-rule bg-paper px-2.5 py-1 text-xs font-medium whitespace-nowrap text-ink transition-colors hover:border-ink-3 hover:bg-sunken disabled:opacity-50 aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-paper;
   }
   .btn-primary {
-    @apply border-sky-500/50 bg-sky-500/20 text-sky-100 hover:bg-sky-500/30;
+    @apply border-ink bg-ink text-paper hover:border-ink-2 hover:bg-ink-2;
   }
-}
-
-/* Let CodeMirror fill its panel. */
-.cm-editor {
-  background: transparent !important;
-}
-.cm-gutters {
-  background: transparent !important;
-  border-right: 1px solid var(--color-line) !important;
+  .eyebrow {
+    @apply font-mono text-[11px] font-medium tracking-wide text-ink-3 uppercase;
+  }
 }
