@@ -54,7 +54,7 @@ export function CodePanel({ className = '' }: { className?: string }) {
   // A selector returning a string: zustand compares by value, so this only
   // re-renders when the code would actually change (not on every animation frame).
   const generated = useScene((s) =>
-    generateCode({ A: s.A, vectors: s.vectors, showEigen: s.toggles.eigen, showInverse: s.toggles.inverse }),
+    generateCode({ A: s.A, after: s.after, vectors: s.vectors, showEigen: s.toggles.eigen, showInverse: s.toggles.inverse }),
   )
   const syncFromCode = useScene((s) => s.syncFromCode)
 

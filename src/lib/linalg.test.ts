@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { apply, classify, det, eigen, fromRows, IDENTITY, inverse, multiply, type Mat2 } from './linalg'
+import { apply, classify, det, eigen, fromRows, IDENTITY, inverse, multiply, chainProduct, sceneMatrixAt, type Mat2 } from './linalg'
 
 const A: Mat2 = { i: [2, 1], j: [-1, 1] } // [[2, -1], [1, 1]]
 
@@ -74,5 +74,40 @@ describe('classify', () => {
   it('finds the reflection line', () => {
     expect(classify({ i: [-1, 0], j: [0, 1] }).detail).toContain('90°')
     expect(classify({ i: [0, 1], j: [1, 0] }).detail).toContain('45°')
+  })
+})
+
+describe('composition', () => {
+  const R: Mat2 = { i: [0, 1], j: [-1, 0] } // rotate 90°
+  const S: Mat2 = { i: [1, 0], j: [1, 1] } // shear
+  it('columns of BA are B applied to the columns of A', () => {
+    const BA = multiply(R, S)
+    expect(BA.i).toEqual(apply(R, S.i))
+    expect(BA.j).toEqual(apply(R, S.j))
+  })
+  it('order matters: RS ≠ SR', () => {
+    expect(multiply(R, S)).not.toEqual(multiply(S, R))
+  })
+  it('det(BA) = det(B)·det(A)', () => {
+    const A: Mat2 = { i: [2, 1], j: [-1, 1] }
+    const B: Mat2 = { i: [1, 2], j: [0, 3] }
+    expect(det(multiply(B, A))).toBeCloseTo(det(B) * det(A))
+  })
+  it('chainProduct applies in order: [A, B, C] → C·B·A', () => {
+    const C: Mat2 = { i: [2, 0], j: [0, 2] }
+    expect(chainProduct([S, R, C])).toEqual(multiply(C, multiply(R, S)))
+    expect(chainProduct([S])).toEqual(S)
+  })
+  it('sceneMatrixAt walks I → A → BA → CBA', () => {
+    const C: Mat2 = { i: [2, 0], j: [0, 2] }
+    expect(sceneMatrixAt([S, R, C], 0)).toEqual(IDENTITY)
+    expect(sceneMatrixAt([S, R, C], 0.32)).toEqual(S)
+    expect(sceneMatrixAt([S, R, C], 0.65)).toEqual(multiply(R, S))
+    expect(sceneMatrixAt([S, R, C], 1)).toEqual(chainProduct([S, R, C]))
+    expect(sceneMatrixAt([S], 1)).toEqual(S)
+  })
+  it('tolerates t slightly outside [0, 1]', () => {
+    expect(sceneMatrixAt([S, R], -0.0004)).toEqual(IDENTITY)
+    expect(sceneMatrixAt([S, R], 1.0004)).toEqual(multiply(R, S))
   })
 })

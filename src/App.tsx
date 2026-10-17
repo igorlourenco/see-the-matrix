@@ -7,8 +7,10 @@ import { Tex } from './components/Tex'
 import { ThemeSwitch } from './components/ThemeSwitch'
 import { Credits } from './components/Credits'
 import { Guide } from './components/Guide'
+import { Checkbox } from './components/inputs'
 import { PlayIcon, Sidebar } from './components/Sidebar'
-import { matApprox } from './lib/linalg'
+import { chainLetters } from './lib/chain'
+import { matApprox, stageAt } from './lib/linalg'
 import { PRESETS } from './lib/presets'
 import { ihat, jhat } from './lib/tex'
 import { useLayout } from './state/layout'
@@ -165,38 +167,50 @@ function Controls() {
   const replay = useScene((s) => s.replay)
   const toggles = useScene((s) => s.toggles)
   const toggle = useScene((s) => s.toggle)
+  const after = useScene((s) => s.after)
+  const letters = ['I', ...chainLetters(after.length)]
+  const { index } = stageAt(letters.length - 1, t)
+  const active = t <= 0 ? 0 : index + 1
 
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-rule bg-panel px-5 py-3">
       <div className="flex items-center gap-2.5">
-        <button onClick={replay} className="btn" title="Animate from the identity to A">
+        <button onClick={replay} className="btn" title={`Animate ${letters.join(' → ')}`}>
           <PlayIcon /> Replay
         </button>
-        <span className="font-mono text-xs text-ink-3">I</span>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={t}
-          onChange={(e) => setT(Number(e.target.value))}
-          aria-label="Animation progress from identity to A"
-          className="w-36 accent-ink"
-        />
-        <span className="font-mono text-xs text-ink-3">A</span>
+        <div className={`relative pb-4 ${letters.length > 3 ? 'w-56' : 'w-44'}`}>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.005}
+            value={t}
+            onChange={(e) => setT(Number(e.target.value))}
+            aria-label={`Animation progress, ${letters.join(' then ')}`}
+            className="block w-full accent-ink"
+          />
+          {/* One label per stage, under the point of the track where that matrix has been fully applied. */}
+          <div aria-hidden className="pointer-events-none absolute inset-x-[7px] bottom-0 h-3.5">
+            {letters.map((L, k) => (
+              <span
+                key={L}
+                style={{ left: `${(k / (letters.length - 1)) * 100}%` }}
+                className={`absolute -translate-x-1/2 font-math text-[13px] leading-none italic transition-colors ${
+                  k === active ? 'text-ink' : 'text-ink-3'
+                } ${k === 0 ? 'not-italic font-mathrm' : ''}`}
+              >
+                {L}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
       <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
         <legend className="sr-only">Show on the canvas</legend>
         {TOGGLES.map(({ key, label }) => (
-          <label key={key} className="group inline-flex cursor-pointer items-center gap-1.5 text-xs text-ink-2 select-none hover:text-ink">
-            <input type="checkbox" checked={toggles[key]} onChange={() => toggle(key)} className="peer sr-only" />
-            <span className="grid size-3.5 place-items-center rounded-[2px] border border-ink-3 text-paper transition-colors group-hover:border-ink peer-checked:border-ink peer-checked:bg-ink peer-focus-visible:outline-[1.5px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink peer-focus-visible:outline-solid">
-              <svg viewBox="0 0 10 10" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M2 5.2l2 2L8 3" />
-              </svg>
-            </span>
-            <span className="peer-checked:text-ink">{label}</span>
-          </label>
+          <Checkbox key={key} checked={toggles[key]} onChange={() => toggle(key)}>
+            {label}
+          </Checkbox>
         ))}
       </fieldset>
     </div>

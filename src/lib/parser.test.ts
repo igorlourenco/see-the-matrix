@@ -16,16 +16,38 @@ describe('parseCode', () => {
         { name: 'v1', coords: [2, 3] },
         { name: 'v2', coords: [-0.25, 7] },
       ],
+      after: [],
       showEigen: true,
       showInverse: true,
     })
     expect(scene(src)).toEqual({
+      after: [],
       basis: { i: [2, 1], j: [-1, 1.5] },
       vectors: [
         { name: 'v1', coords: [2, 3] },
         { name: 'v2', coords: [-0.25, 7] },
       ],
     })
+  })
+
+  it('round-trips a composition chain', () => {
+    const after = [
+      { i: [0, 1], j: [-1, 0] },
+      { i: [2, 0], j: [0, 0.5] },
+    ] as const
+    const src = generateCode({
+      A: { i: [1, 0], j: [1, 1] },
+      after: [...after],
+      vectors: [{ name: 'v1', coords: [2, 3] }],
+      showEigen: true,
+      showInverse: true,
+    })
+    expect(src).toContain('M = C @ B @ A')
+    expect(src).toContain('C @ (B @ (A @ v1))')
+    const s = scene(src)
+    expect(s.after).toEqual(after)
+    expect(s.vectors).toEqual([{ name: 'v1', coords: [2, 3] }])
+    expect(scene('A = np.array([[1, 0], [0, 1]])').after).toEqual([])
   })
 
   it('reads A = np.array as ROWS', () => {

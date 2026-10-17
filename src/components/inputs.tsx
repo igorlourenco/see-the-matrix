@@ -1,7 +1,7 @@
 /** Column-vector inputs: the "type numbers" way to edit the scene. */
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { fmt } from '../lib/format'
-import type { Vec2 } from '../lib/linalg'
+import type { Mat2, Vec2 } from '../lib/linalg'
 
 /**
  * A number input that tolerates half-typed values like "-" or "1.".
@@ -66,6 +66,42 @@ export function ColumnVector({
   )
 }
 
+/**
+ * A 2×2 matrix as one bracketed grid, written the usual way (rows), with the
+ * î column and ĵ column tinted so you can still read it as "where î and ĵ land".
+ */
+export function MatrixInput({
+  value,
+  onChange,
+  colors,
+  name,
+}: {
+  value: Mat2
+  onChange: (which: 'i' | 'j', v: Vec2) => void
+  colors: { i: string; j: string; bracket: string }
+  name: string
+}) {
+  const cell = (which: 'i' | 'j', row: 0 | 1) => (
+    <span style={{ color: which === 'i' ? colors.i : colors.j }} className="[&_input]:text-current">
+      <NumberField
+        value={value[which][row]}
+        onCommit={(x) => onChange(which, row === 0 ? [x, value[which][1]] : [value[which][0], x])}
+        label={`${name} row ${row + 1} column ${which === 'i' ? 1 : 2}`}
+      />
+    </span>
+  )
+  return (
+    <div className="relative inline-grid grid-cols-2 px-1.5">
+      <span className="absolute inset-y-0 left-0 w-1.5 rounded-l border-y-2 border-l-2" style={{ borderColor: colors.bracket }} />
+      {cell('i', 0)}
+      {cell('j', 0)}
+      {cell('i', 1)}
+      {cell('j', 1)}
+      <span className="absolute inset-y-0 right-0 w-1.5 rounded-r border-y-2 border-r-2" style={{ borderColor: colors.bracket }} />
+    </div>
+  )
+}
+
 /** Read-only column vector, for showing outputs next to inputs. */
 export function ColumnReadout({ value, color }: { value: Vec2; color: string }) {
   return (
@@ -102,5 +138,19 @@ export function Section({ title, hint, children }: { title: string; hint?: React
       {hint && <p className="mt-1 max-w-[46ch] text-[13px] leading-snug text-ink-2">{hint}</p>}
       <div className="mt-4">{children}</div>
     </section>
+  )
+}
+
+export function Checkbox({ checked, onChange, children }: { checked: boolean; onChange: () => void; children: ReactNode }) {
+  return (
+    <label className="group inline-flex cursor-pointer items-center gap-1.5 text-xs text-ink-2 select-none hover:text-ink">
+      <input type="checkbox" checked={checked} onChange={onChange} className="peer sr-only" />
+      <span className="grid size-3.5 place-items-center rounded-[2px] border border-ink-3 text-paper transition-colors group-hover:border-ink peer-checked:border-ink peer-checked:bg-ink peer-focus-visible:outline-[1.5px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink peer-focus-visible:outline-solid">
+        <svg viewBox="0 0 10 10" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M2 5.2l2 2L8 3" />
+        </svg>
+      </span>
+      <span className="peer-checked:text-ink">{children}</span>
+    </label>
   )
 }

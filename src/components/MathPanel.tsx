@@ -7,28 +7,46 @@
  */
 import type { ReactNode } from 'react'
 import { fmt } from '../lib/format'
-import { apply, approx, classify, det, eigen, entries, inverse, TOL, trace, type Mat2, type Vec2 } from '../lib/linalg'
+import { AFTER_NAMES, chainLetters, productName } from '../lib/chain'
+import { apply, approx, chainProduct, classify, det, eigen, entries, inverse, matApprox, TOL, trace, type Mat2, type Vec2 } from '../lib/linalg'
 import { col, color, ihat, jhat, matrix, n, p, vecName } from '../lib/tex'
-import { useScene, type VectorItem } from '../state/store'
+import { chainOf, useScene, type VectorItem } from '../state/store'
 import { toHex, usePalette } from '../state/theme'
 import { VecName } from './inputs'
 import { Tex } from './Tex'
 
 const num = (x: number) => fmt(x).replace('-', '−')
 
+/** How the transformation on screen is written: A alone, or BA when composing. */
+interface Sym {
+  tex: string
+  /** For powers like the inverse: (BA)⁻¹, not BA⁻¹. */
+  texGroup: string
+  words: string
+}
+const symFor = (afterCount: number): Sym => {
+  const name = productName(afterCount)
+  return { tex: name, texGroup: afterCount ? `(${name})` : name, words: name }
+}
+
 export function MathPanel() {
   const A = useScene((s) => s.A)
+  const after = useScene((s) => s.after)
+  const compose = after.length > 0
   const vectors = useScene((s) => s.vectors)
   const toggles = useScene((s) => s.toggles)
   const tc = useTexColors()
+  const T = chainProduct(chainOf(A, after))
+  const sym = symFor(after.length)
 
   const blocks: { key: string; render: (step: number) => ReactNode }[] = [
-    { key: 'matrix', render: (step) => <MatrixBlock step={step} A={A} tc={tc} /> },
-    ...(toggles.type ? [{ key: 'type', render: (step: number) => <TypeBlock step={step} A={A} /> }] : []),
-    ...vectors.map((v) => ({ key: v.id, render: (step: number) => <VectorBlock step={step} A={A} v={v} tc={tc} /> })),
-    { key: 'det', render: (step) => <DetBlock step={step} A={A} tc={tc} /> },
-    ...(toggles.eigen ? [{ key: 'eigen', render: (step: number) => <EigenBlock step={step} A={A} tc={tc} /> }] : []),
-    ...(toggles.inverse ? [{ key: 'inverse', render: (step: number) => <InverseBlock step={step} A={A} /> }] : []),
+    { key: 'matrix', render: (step) => <MatrixBlock step={step} A={A} tc={tc} first={compose} /> },
+    ...(compose ? [{ key: 'compose', render: (step: number) => <CompositionBlock step={step} A={A} after={after} tc={tc} /> }] : []),
+    ...(toggles.type ? [{ key: 'type', render: (step: number) => <TypeBlock step={step} A={T} sym={sym} composed={compose} /> }] : []),
+    ...vectors.map((v) => ({ key: v.id, render: (step: number) => <VectorBlock step={step} A={T} v={v} tc={tc} sym={sym} /> })),
+    { key: 'det', render: (step) => <DetBlock step={step} A={T} tc={tc} sym={sym} /> },
+    ...(toggles.eigen ? [{ key: 'eigen', render: (step: number) => <EigenBlock step={step} A={T} tc={tc} sym={sym} /> }] : []),
+    ...(toggles.inverse ? [{ key: 'inverse', render: (step: number) => <InverseBlock step={step} A={T} sym={sym} /> }] : []),
   ]
 
   return (
@@ -54,9 +72,9 @@ function useTexColors() {
   }
 }
 
-function MatrixBlock({ step, A, tc }: { step: number; A: Mat2; tc: TexColors }) {
+function MatrixBlock({ step, A, tc, first }: { step: number; A: Mat2; tc: TexColors; first: boolean }) {
   return (
-    <Block step={step} label="The matrix" title="Its columns are where î and ĵ land">
+    <Block step={step} label={first ? 'First: the matrix A' : 'The matrix'} title="Its columns are where î and ĵ land">
       <Tex block tex={`A = \\begin{bmatrix} ${ihat(tc.i)} & ${jhat(tc.j)} \\end{bmatrix} = ${matrix(A, tc)}`} />
       <Note>
         <I /> = [1, 0] lands on [{num(A.i[0])}, {num(A.i[1])}], and <J /> = [0, 1] lands on [{num(A.j[0])},{' '}
@@ -66,10 +84,66 @@ function MatrixBlock({ step, A, tc }: { step: number; A: Mat2; tc: TexColors }) 
   )
 }
 
-function TypeBlock({ step, A }: { step: number; A: Mat2 }) {
+/**
+ * Composition: "apply A, then B, then C" is the single matrix CBA.
+ * Each column of the product follows î (or ĵ) through the chain:
+ *   (CBA)·î = C(B(A·î)): see where A sends î, then where B sends that, then C.
+ */
+function CompositionBlock({ step, A, after, tc }: { step: number; A: Mat2; after: readonly Mat2[]; tc: TexColors }) {
+  const count = after.length
+  const mats = [A, ...after]
+  const letters = chainLetters(count)
+  const name = productName(count)
+  const total = chainProduct(mats)
+  const reversedName = letters.join('')
+  const reversed = chainProduct([...mats].reverse())
+  const commute = matApprox(reversed, total)
+  const prefix = (m: number) => AFTER_NAMES.slice(0, m).reverse().join('')
+
+  // î through the chain: (CBA)î = CB(Aî) = CB[..] = C[..] = [..]
+  const follow = (start: Vec2, hat: string, colorHex: string) => {
+    let v = start
+    const steps = [`${prefix(count)}\\,(A${hat})`, `${prefix(count)}${col(v, colorHex)}`]
+    for (let k = 0; k < count; k++) {
+      v = apply(after[k], v)
+      steps.push(k === count - 1 ? col(v, colorHex) : `${prefix(count).slice(0, count - k - 1)}${col(v, colorHex)}`)
+    }
+    return `(${name})${hat} &= ${steps.join(' = ')}`
+  }
+  const columns = String.raw`\begin{aligned}
+${follow(A.i, ihat(tc.i), tc.i)} \\
+${follow(A.j, jhat(tc.j), tc.j)}
+\end{aligned}`
+  const dets = mats.map(det)
+
+  return (
+    <Block step={step} label={`Then: ${AFTER_NAMES.slice(0, count).join(', ')}`} title={`${letters.join(', then ')} is one matrix: ${name}`}>
+      <Tex block tex={`${name} = ${[...mats].reverse().map((M, k) => (k === count ? matrix(M, tc) : matrix(M))).join(' ')} = ${matrix(total, tc)}`} />
+      <Note>Read right to left: A acts first. Follow î and ĵ through each matrix to get the columns of {name}.</Note>
+      <Tex block tex={columns} />
+      {commute ? (
+        <Note>
+          Here {reversedName} = {name}: this order happens not to matter. Most of the time it does.
+        </Note>
+      ) : (
+        <>
+          <Tex block tex={`${reversedName} = ${matrix(reversed)} \\neq ${name}`} />
+          <Note>Order matters: the same matrices applied in the opposite order give a different transformation. Try “Reverse order”.</Note>
+        </>
+      )}
+      <Tex
+        block
+        tex={`\\det(${name}) = ${[...letters].reverse().map((L) => `\\det(${L})`).join('\\,')} = ${[...dets].reverse().map(p).join(' \\cdot ')} = ${n(dets.reduce((a, b) => a * b, 1))}`}
+      />
+      <Note>Each matrix scales areas by its own factor, so the factors multiply.</Note>
+    </Block>
+  )
+}
+
+function TypeBlock({ step, A, sym, composed }: { step: number; A: Mat2; sym: Sym; composed: boolean }) {
   const { name, detail } = classify(A)
   return (
-    <Block step={step} label="Kind of transformation" title={name}>
+    <Block step={step} label={composed ? `Kind of transformation (${sym.words})` : 'Kind of transformation'} title={name}>
       <Note>{detail}</Note>
     </Block>
   )
@@ -79,7 +153,7 @@ function TypeBlock({ step, A }: { step: number; A: Mat2 }) {
  * The key derivation:
  *   A·v = x·î + y·ĵ   (with î, ĵ = the NEW basis vectors, i.e. A's columns)
  */
-function VectorBlock({ step, A, v, tc }: { step: number; A: Mat2; v: VectorItem; tc: TexColors }) {
+function VectorBlock({ step, A, v, tc, sym }: { step: number; A: Mat2; v: VectorItem; tc: TexColors; sym: Sym }) {
   const vc = tc.vectors[v.colorIndex]
   const [x, y] = v.coords
   const { a, b, c, d } = entries(A)
@@ -87,7 +161,7 @@ function VectorBlock({ step, A, v, tc }: { step: number; A: Mat2; v: VectorItem;
   const name = vecName(v.name)
 
   const tex = String.raw`\begin{aligned}
-A${name} &= ${matrix(A, tc)} ${col(v.coords, vc)} \\
+${sym.tex}${name} &= ${matrix(A, tc)} ${col(v.coords, vc)} \\
 &= ${n(x)}\,${ihat(tc.i)} + ${p(y)}\,${jhat(tc.j)} \\
 &= ${n(x)} ${col(A.i, tc.i)} + ${p(y)} ${col(A.j, tc.j)} \\
 &= \begin{bmatrix} ${p(x)}\cdot${p(a)} + ${p(y)}\cdot${p(b)} \\ ${p(x)}\cdot${p(c)} + ${p(y)}\cdot${p(d)} \end{bmatrix}
@@ -97,7 +171,7 @@ A${name} &= ${matrix(A, tc)} ${col(v.coords, vc)} \\
   return (
     <Block
       step={step}
-      label="Applying A"
+      label={`Applying ${sym.words}`}
       title={
         <span className="text-[19px] tracking-normal" style={{ color: vc }}>
           <VecName name={v.name} /> <span className="font-mathrm font-normal">=</span> <Pair v={v.coords} />{' '}
@@ -106,7 +180,7 @@ A${name} &= ${matrix(A, tc)} ${col(v.coords, vc)} \\
       }
     >
       <Note>
-        The coordinates are a recipe: {num(x)} of <I /> plus {num(y)} of <J />. A keeps the recipe and swaps in the{' '}
+        The coordinates are a recipe: {num(x)} of <I /> plus {num(y)} of <J />. {sym.words} keeps the recipe and swaps in the{' '}
         <em>new</em> <I /> and <J />.
       </Note>
       <Tex block tex={tex} />
@@ -114,14 +188,14 @@ A${name} &= ${matrix(A, tc)} ${col(v.coords, vc)} \\
   )
 }
 
-function DetBlock({ step, A, tc }: { step: number; A: Mat2; tc: TexColors }) {
+function DetBlock({ step, A, tc, sym }: { step: number; A: Mat2; tc: TexColors; sym: Sym }) {
   const { a, b, c, d } = entries(A)
   const D = det(A)
   const flat = Math.abs(D) < TOL
   const scaleWords = approx(Math.abs(D), 1) ? 'Areas are preserved' : `Areas scale by ${num(Math.abs(D))}×`
   const title = flat ? 'Space collapses onto a line' : D < 0 ? `Space flips, and ${scaleWords.toLowerCase()}` : scaleWords
   const note = flat
-    ? 'det = 0: every area becomes 0. Information is lost, so A has no inverse.'
+    ? `det = 0: every area becomes 0. Information is lost, so ${sym.words} has no inverse.`
     : D < 0
       ? 'det < 0 means orientation flipped: ĵ is now clockwise from î, like a mirror image.'
       : `The unit square (area 1) becomes the hatched parallelogram (area ${num(D)}).`
@@ -130,18 +204,18 @@ function DetBlock({ step, A, tc }: { step: number; A: Mat2; tc: TexColors }) {
     <Block step={step} label="Determinant" title={title}>
       <Tex
         block
-        tex={`\\det(A) = ad - bc = ${p(a)}\\cdot${p(d)} - ${p(b)}\\cdot${p(c)} = ${color(D < 0 ? tc.detNeg : tc.detPos, n(D))}`}
+        tex={`\\det(${sym.tex}) = ad - bc = ${p(a)}\\cdot${p(d)} - ${p(b)}\\cdot${p(c)} = ${color(D < 0 ? tc.detNeg : tc.detPos, n(D))}`}
       />
       <Note>{note}</Note>
     </Block>
   )
 }
 
-function EigenBlock({ step, A, tc }: { step: number; A: Mat2; tc: TexColors }) {
+function EigenBlock({ step, A, tc, sym }: { step: number; A: Mat2; tc: TexColors; sym: Sym }) {
   const tr = trace(A)
   const D = det(A)
   const e = eigen(A)
-  const poly = `\\det(A - \\lambda I) = ${characteristic(tr, D)} = 0`
+  const poly = `\\det(${sym.tex} - \\lambda I) = ${characteristic(tr, D)} = 0`
 
   let title: string
   let result: ReactNode
@@ -153,7 +227,7 @@ function EigenBlock({ step, A, tc }: { step: number; A: Mat2; tc: TexColors }) {
   } else if (e.kind === 'every') {
     title = 'Every vector is an eigenvector'
     result = <Tex block tex={`\\lambda = ${color(tc.eigen, n(e.value))}`} />
-    note = `A only scales: everything stretches by ${num(e.value)} and keeps its direction.`
+    note = `${sym.words} only scales: everything stretches by ${num(e.value)} and keeps its direction.`
   } else {
     const pairs = e.kind === 'distinct' ? e.pairs : [e.pair]
     title = pairs.length === 1 ? 'One line stays on its span' : 'Two lines stay on their span'
@@ -172,7 +246,7 @@ function EigenBlock({ step, A, tc }: { step: number; A: Mat2; tc: TexColors }) {
   return (
     <Block step={step} label="Eigenvectors" title={title}>
       <Note>
-        Directions where <Tex tex="A\mathbf{u} = \lambda\mathbf{u}" />. They exist when:
+        Directions where <Tex tex={`${sym.tex}\\mathbf{u} = \\lambda\\mathbf{u}`} />. They exist when:
       </Note>
       <Tex block tex={poly} />
       {result}
@@ -181,14 +255,14 @@ function EigenBlock({ step, A, tc }: { step: number; A: Mat2; tc: TexColors }) {
   )
 }
 
-function InverseBlock({ step, A }: { step: number; A: Mat2 }) {
+function InverseBlock({ step, A, sym }: { step: number; A: Mat2; sym: Sym }) {
   const inv = inverse(A)
   const { a, b, c, d } = entries(A)
   if (!inv) {
     return (
       <Block step={step} label="Inverse" title="No inverse">
         <Note>
-          det = 0 means many inputs land on the same output, so there's no way to undo A and know where you started.
+          det = 0 means many inputs land on the same output, so there's no way to undo {sym.words} and know where you started.
         </Note>
       </Block>
     )
@@ -196,13 +270,13 @@ function InverseBlock({ step, A }: { step: number; A: Mat2 }) {
   const D = det(A)
   const adjugate = `\\begin{bmatrix} ${n(d)} & ${n(-b)} \\\\ ${n(-c)} & ${n(a)} \\end{bmatrix}`
   return (
-    <Block step={step} label="Inverse" title="A can be undone">
+    <Block step={step} label="Inverse" title={`${sym.words} can be undone`}>
       <Tex
         block
-        tex={`A^{-1} = \\frac{1}{\\det A} ${approx(D, 1) ? adjugate : `\\begin{bmatrix} d & -b \\\\ -c & a \\end{bmatrix} = \\frac{1}{${n(D)}} ${adjugate}`} = ${matrix(inv)}`}
+        tex={`${sym.texGroup}^{-1} = \\frac{1}{\\det ${sym.texGroup}} ${approx(D, 1) ? adjugate : `\\begin{bmatrix} d & -b \\\\ -c & a \\end{bmatrix} = \\frac{1}{${n(D)}} ${adjugate}`} = ${matrix(inv)}`}
       />
       <Note>
-        <Tex tex="A^{-1}(A\mathbf{v}) = \mathbf{v}" />. Its columns are where <I /> and <J /> must start so that A sends
+        <Tex tex={`${sym.texGroup}^{-1}(${sym.tex}\\mathbf{v}) = \\mathbf{v}`} />. Its columns are where <I /> and <J /> must start so that {sym.words} sends
         them back to [1, 0] and [0, 1].
       </Note>
     </Block>

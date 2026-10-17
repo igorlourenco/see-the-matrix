@@ -290,3 +290,42 @@ export function classify(A: Mat2): Classification {
     ? { name: 'General linear map', detail: 'A mix of stretching, rotating and shearing. Orientation is preserved.' }
     : { name: 'General linear map (flipped)', detail: 'A mix of stretching, rotating and shearing, and orientation flips (det < 0).' }
 }
+
+// ---------------------------------------------------------------------------
+// Composition: apply A, then B, then C, ...
+// ---------------------------------------------------------------------------
+
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x))
+const easeInOut = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2)
+
+/** Fraction of each stage spent moving; the rest is a short pause before the next matrix. */
+const MOVE_FRACTION = 0.8
+
+/** Multiply a chain applied in order: [A, B, C] → C·B·A. */
+export const chainProduct = (mats: readonly Mat2[]): Mat2 => mats.reduce((acc, M) => multiply(M, acc), IDENTITY)
+
+/** Which stage animation progress t ∈ [0, 1] is in, and how far through its motion (0..1). */
+export function stageAt(stages: number, t: number): { index: number; s: number } {
+  const u = clamp01(t)
+  const index = Math.min(stages - 1, Math.floor(u * stages))
+  const local = u * stages - index
+  return { index, s: clamp01(local / MOVE_FRACTION) }
+}
+
+/**
+ * The matrix drawn at animation progress t ∈ [0, 1].
+ *
+ * One matrix: a straight blend from I to A.
+ * A chain [A, B, C, ...], one stage each. During a stage, everything before it
+ * is already applied and the new matrix is blended in on top:
+ *   M = lerp(I, C, s) · (B · A)
+ * Blending I → C *after* the earlier ones (instead of blending entries of
+ * the final product) is what makes each stage look like C acting on space
+ * that's already transformed.
+ */
+export function sceneMatrixAt(mats: readonly Mat2[], t: number): Mat2 {
+  if (mats.length === 1) return lerpMatrix(IDENTITY, mats[0], t)
+  const { index, s } = stageAt(mats.length, t)
+  const before = chainProduct(mats.slice(0, index))
+  return multiply(lerpMatrix(IDENTITY, mats[index], easeInOut(s)), before)
+}

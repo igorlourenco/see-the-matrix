@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { useScene } from './store'
 
 const DURATION_MS = 1400
+/** Per matrix in a chain: I → A, then B on top, then C, ... */
+const STAGE_MS = 1300
 
 /** Slow start, slow finish: the eye can follow the grid as it bends. */
 const easeInOutCubic = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2)
@@ -23,11 +25,16 @@ export function useAnimation() {
       return
     }
 
+    // In compose mode the canvas eases each stage itself, so t stays linear here.
+    const stages = 1 + useScene.getState().after.length
+    const compose = stages > 1
+    const duration = compose ? stages * STAGE_MS : DURATION_MS
     const start = performance.now()
     let frame = requestAnimationFrame(function tick(now) {
-      const p = Math.min(1, (now - start) / DURATION_MS)
+      // rAF timestamps the frame's start, which can be slightly before `start`; clamp so t never dips below 0.
+      const p = Math.min(1, Math.max(0, (now - start) / duration))
       // setState directly (not the setT action), because setT also stops playback.
-      useScene.setState({ t: easeInOutCubic(p) })
+      useScene.setState({ t: compose ? p : easeInOutCubic(p) })
       if (p < 1) frame = requestAnimationFrame(tick)
       else useScene.setState({ playing: false })
     })

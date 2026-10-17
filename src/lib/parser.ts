@@ -13,16 +13,20 @@
  *   i_hat = np.array([np.cos(theta), np.sin(theta)])   basis vectors
  *   A = np.column_stack([i_hat, j_hat])                matrix from columns
  *   A = np.array([[2, -1], [1, 1]])                    matrix from ROWS
+ *   B = np.array([[0, -1], [1, 0]])                    matrices applied after A: B, C, D, E, F
  *   v1 = np.array([2, 3])                              any other 2D vector
  *
  * Any other line (print, if, `w = A @ v1`, ...) is skipped, so the user can
  * write normal Python around these.
  */
-import { fromRows, type Vec2 } from './linalg'
+import { AFTER_NAMES } from './chain'
+import { fromRows, type Mat2, type Vec2 } from './linalg'
 
 export interface ParsedScene {
   /** Missing entries mean "leave as it is". */
   basis: { i?: Vec2; j?: Vec2 }
+  /** Matrices applied after A, in order (B, C, ...). Empty: no composition. */
+  after: Mat2[]
   vectors: { name: string; coords: Vec2 }[]
 }
 
@@ -41,6 +45,8 @@ export function parseCode(source: string): ParseResult {
   const env = new Map<string, Value>()
   const order: string[] = [] // first-assignment order, so vectors keep their place
   let matrixA: [Vec2, Vec2] | null = null
+  const afterMats = new Map<string, [Vec2, Vec2]>()
+  const isAfterName = (name: string) => (AFTER_NAMES as readonly string[]).includes(name)
 
   for (const stmt of splitStatements(source)) {
     // Only top-level `name = expr` lines. Indented lines (inside if/for)
@@ -50,7 +56,7 @@ export function parseCode(source: string): ParseResult {
     const [, name, rhs] = m
     // Lines that clearly try to set the scene must parse, or the user gets an error.
     // Anything else we can't evaluate is plain Python that only Pyodide runs.
-    const mustParse = /^np\.(array|column_stack)\s*\(/.test(rhs) || ['i_hat', 'j_hat', 'A'].includes(name)
+    const mustParse = /^np\.(array|column_stack)\s*\(/.test(rhs) || ['i_hat', 'j_hat', 'A'].includes(name) || isAfterName(name)
 
     let value: Value
     try {
@@ -59,6 +65,7 @@ export function parseCode(source: string): ParseResult {
       if (mustParse) return { ok: false, line: stmt.line, error: (e as Error).message }
       env.delete(name) // we no longer know this name's value
       if (name === 'A') matrixA = null
+      afterMats.delete(name)
       continue
     }
 
@@ -68,6 +75,7 @@ export function parseCode(source: string): ParseResult {
     env.set(name, value)
     if (!order.includes(name)) order.push(name)
     if (name === 'A' && isMat2(value)) matrixA = value
+    if (isAfterName(name) && isMat2(value)) afterMats.set(name, value)
   }
 
   // A matrix assigned to A wins, as in Python: later edits to i_hat don't
@@ -85,13 +93,21 @@ export function parseCode(source: string): ParseResult {
   }
 
   const vectors = order
-    .filter((name) => name !== 'i_hat' && name !== 'j_hat')
+    .filter((name) => name !== 'i_hat' && name !== 'j_hat' && !isAfterName(name))
     .flatMap((name) => {
       const v = env.get(name)
       return v !== undefined && isVec2(v) ? [{ name, coords: v }] : []
     })
 
-  return { ok: true, scene: { basis, vectors } }
+  // The chain runs B, C, D, ... and stops at the first missing letter.
+  const after: Mat2[] = []
+  for (const name of AFTER_NAMES) {
+    const rows = afterMats.get(name)
+    if (!rows) break
+    after.push(fromRows(rows))
+  }
+
+  return { ok: true, scene: { basis, vectors, after } }
 }
 
 function isVec2(v: Value): v is [number, number] {
@@ -103,7 +119,7 @@ function isMat2(v: Value): v is [[number, number], [number, number]] {
 }
 
 function checkShape(name: string, v: Value): string | null {
-  if (name === 'A' && !isMat2(v)) return 'A must be a 2×2 matrix, like np.array([[1, 0], [0, 1]])'
+  if ((name === 'A' || (AFTER_NAMES as readonly string[]).includes(name)) && !isMat2(v)) return `${name} must be a 2×2 matrix, like np.array([[1, 0], [0, 1]])`
   if ((name === 'i_hat' || name === 'j_hat') && !isVec2(v)) return `${name} must be a 2D vector, like np.array([1, 0])`
   if (Array.isArray(v) && !isVec2(v) && !isMat2(v)) {
     return `${name} has shape this 2D view doesn't support (expected 2 numbers, or 2×2)`

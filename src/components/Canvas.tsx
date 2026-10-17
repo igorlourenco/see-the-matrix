@@ -17,14 +17,16 @@ import {
   eigen,
   IDENTITY,
   inverse,
-  lerpMatrix,
   matApprox,
   scale,
+  sceneMatrixAt,
+  stageAt,
   type EigenPair,
   type Mat2,
   type Vec2,
 } from '../lib/linalg'
-import { useScene } from '../state/store'
+import { chainLetters } from '../lib/chain'
+import { chainOf, totalMatrix, useScene } from '../state/store'
 import { usePalette, type Palette } from '../state/theme'
 
 type Drag = { kind: 'basis'; which: 'i' | 'j' } | { kind: 'input'; id: string } | { kind: 'output'; id: string }
@@ -40,6 +42,8 @@ export function Canvas() {
   const [dragging, setDragging] = useState(false)
 
   const A = useScene((s) => s.A)
+  const after = useScene((s) => s.after)
+  const compose = after.length > 0
   const t = useScene((s) => s.t)
   const vectors = useScene((s) => s.vectors)
   const toggles = useScene((s) => s.toggles)
@@ -79,7 +83,11 @@ export function Canvas() {
   }
 
   // ---- The matrix currently on screen ---------------------------------------
-  const M = lerpMatrix(IDENTITY, A, t)
+  const chain = chainOf(A, after)
+  const M = sceneMatrixAt(chain, t)
+  const T = totalMatrix(A, after)
+  const stage = stageAt(chain.length, t)
+  const showStageA = compose && stage.index > 0
   const moved = !matApprox(M, IDENTITY)
   const halfExtent = Math.max(cx, cy) / unit // world units from center to the far edge
 
@@ -107,7 +115,7 @@ export function Canvas() {
     } else {
       // Dragging the transformed arrow asks: "which input lands HERE?"
       // That's M⁻¹ applied to the pointer, possible only if M is invertible.
-      const inv = inverse(lerpMatrix(IDENTITY, s.A, s.t))
+      const inv = inverse(sceneMatrixAt(chainOf(s.A, s.after), s.t))
       if (inv) s.updateVector(d.id, snapVec(apply(inv, w)), 'canvas')
     }
   }
@@ -141,7 +149,25 @@ export function Canvas() {
         {toggles.originalGrid && <GraphPaper S={S} unit={unit} halfExtent={halfExtent} pal={pal} />}
         {toggles.detArea && <DetArea S={S} M={M} pal={pal} />}
         <TransformedGrid S={S} M={M} halfExtent={halfExtent} pal={pal} />
-        {toggles.eigen && <EigenLines S={S} A={A} M={M} pal={pal} />}
+        {toggles.eigen && <EigenLines S={S} A={T} M={M} pal={pal} showArrows={!compose || t >= 1} />}
+
+        {/* Composition: where A alone sent î and ĵ, before B acted. Drag these to edit A. */}
+        {showStageA &&
+          (['i', 'j'] as const).map((which) => {
+            const tip = S(A[which])
+            const c = which === 'i' ? pal.ihat : pal.jhat
+            return (
+              <g key={`stageA-${which}`}>
+                <g opacity={0.55}>
+                  <Arrow from={origin} to={tip} color={c} width={2} dashed />
+                  <Label at={tip} from={origin} color={c} halo={pal.paper}>
+                    {which === 'i' ? 'Aî' : 'Aĵ'}
+                  </Label>
+                </g>
+                <Handle at={tip} onPointerDown={startDrag({ kind: 'basis', which })} />
+              </g>
+            )
+          })}
 
         {/* Ghosts: where each vector started (only once the plane has moved). */}
         {moved &&
@@ -185,7 +211,7 @@ export function Canvas() {
               <Label at={tip} from={origin} color={c} halo={pal.paper} big>
                 {which === 'i' ? 'î' : 'ĵ'}
               </Label>
-              <Handle at={tip} onPointerDown={startDrag({ kind: 'basis', which })} />
+              {!compose && <Handle at={tip} onPointerDown={startDrag({ kind: 'basis', which })} />}
             </g>
           )
         })}
@@ -195,7 +221,9 @@ export function Canvas() {
 
       {t < 1 && (
         <div className="pointer-events-none absolute top-3 left-3 rounded-[3px] border border-rule bg-panel px-2 py-1 font-mono text-xs text-ink-2">
-          (1−t)·I + t·A, t = {t.toFixed(2)}
+          {compose
+            ? `${stage.index === 0 ? 'applying' : 'then applying'} ${chainLetters(after.length)[stage.index]}`
+            : `(1−t)·I + t·A, t = ${t.toFixed(2)}`}
         </div>
       )}
       <div className="absolute right-3 bottom-3 flex gap-1">
@@ -355,8 +383,10 @@ function DetArea({ S, M, pal }: { S: ToScreen; M: Mat2; pal: Palette }) {
  * M(t) = (1−t)·I + t·A has the SAME eigenvectors as A:
  *   M(t)·u = (1−t)·u + t·λ·u = (1 − t + tλ)·u
  * So during the animation the arrow on each line only slides along it.
+ * The two-stage composition path doesn't have that property, so there the
+ * arrows only appear once the animation has finished.
  */
-function EigenLines({ S, A, M, pal }: { S: ToScreen; A: Mat2; M: Mat2; pal: Palette }) {
+function EigenLines({ S, A, M, pal, showArrows }: { S: ToScreen; A: Mat2; M: Mat2; pal: Palette; showArrows: boolean }) {
   const e = eigen(A)
   const pairs: EigenPair[] = e.kind === 'distinct' ? e.pairs : e.kind === 'repeated' ? [e.pair] : []
   const origin = S([0, 0])
@@ -369,13 +399,13 @@ function EigenLines({ S, A, M, pal }: { S: ToScreen; A: Mat2; M: Mat2; pal: Pale
         return (
           <g key={idx}>
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={pal.eigen} strokeWidth={1.25} strokeDasharray="7 5" />
-            <Arrow from={origin} to={tip} color={pal.eigen} width={2.25} />
-            <Label at={tip} from={origin} color={pal.eigen} halo={pal.paper} upright>
+            {showArrows && <Arrow from={origin} to={tip} color={pal.eigen} width={2.25} />}
+            {showArrows && <Label at={tip} from={origin} color={pal.eigen} halo={pal.paper} upright>
               <tspan className="font-math" fontStyle="italic">
                 λ
               </tspan>
               {` = ${fmt(value)}`}
-            </Label>
+            </Label>}
           </g>
         )
       })}

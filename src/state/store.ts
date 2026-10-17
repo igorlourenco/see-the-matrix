@@ -18,7 +18,8 @@
  * to overwrite the text the user is typing with freshly generated code.
  */
 import { create } from 'zustand'
-import { IDENTITY, type Mat2, type Vec2 } from '../lib/linalg'
+import { MAX_AFTER } from '../lib/chain'
+import { chainProduct, IDENTITY, type Mat2, type Vec2 } from '../lib/linalg'
 import type { ParsedScene } from '../lib/parser'
 import { PRESETS } from '../lib/presets'
 
@@ -45,6 +46,8 @@ export interface Toggles {
 
 interface SceneState {
   A: Mat2
+  /** Matrices applied after A, in order: B, C, D, ... Empty = no composition. */
+  after: Mat2[]
   vectors: VectorItem[]
   /** Animation progress: the canvas draws lerp(I, A, t). 1 = fully transformed. */
   t: number
@@ -62,6 +65,11 @@ interface Actions {
   updateVector: (id: string, coords: Vec2, source: EditSource) => void
   removeVector: (id: string) => void
   syncFromCode: (scene: ParsedScene) => void
+  addAfter: () => void
+  removeAfter: (index: number) => void
+  setAfterVector: (index: number, which: 'i' | 'j', v: Vec2) => void
+  applyAfterPreset: (index: number, id: string) => void
+  reverseChain: () => void
   replay: () => void
   setT: (t: number) => void
   setPlaying: (playing: boolean) => void
@@ -69,6 +77,15 @@ interface Actions {
 }
 
 export const VECTOR_COLOR_COUNT = 6
+
+/** The whole chain in application order: [A, B, C, ...]. */
+export const chainOf = (A: Mat2, after: readonly Mat2[]): Mat2[] => [A, ...after]
+
+/** The transformation on screen: A alone, or "A, then B, then C" = C·B·A. */
+export const totalMatrix = (A: Mat2, after: readonly Mat2[]): Mat2 => chainProduct(chainOf(A, after))
+
+/** Matrices offered when adding a step, so each new one looks different from the last. */
+const AFTER_DEFAULTS = ['rotate90', 'shear', 'scale', 'reflect', 'stretch']
 
 let nextId = 1
 const newId = () => `vec-${nextId++}`
@@ -95,6 +112,7 @@ const initialVectors: VectorItem[] = [
 
 export const useScene = create<SceneState & Actions>()((set) => ({
   A: IDENTITY,
+  after: [],
   vectors: initialVectors,
   t: 1,
   playing: false,
@@ -129,7 +147,7 @@ export const useScene = create<SceneState & Actions>()((set) => ({
 
   // Vectors are matched by NAME, so editing `v1 = ...` in code keeps v1's
   // color and identity instead of creating a new arrow.
-  syncFromCode: ({ basis, vectors }) =>
+  syncFromCode: ({ basis, after, vectors }) =>
     set((s) => {
       const kept = s.vectors.filter((v) => vectors.some((p) => p.name === v.name))
       const next: VectorItem[] = []
@@ -139,11 +157,45 @@ export const useScene = create<SceneState & Actions>()((set) => ({
       }
       return {
         A: { i: basis.i ?? s.A.i, j: basis.j ?? s.A.j },
+        after,
         vectors: next,
         t: 1,
         playing: false,
         lastSource: 'code',
       }
+    }),
+
+  // Chain changes replay the whole story, I → A → B → ..., so you see the new step in context.
+  addAfter: () =>
+    set((s) => {
+      if (s.after.length >= MAX_AFTER) return {}
+      const preset = PRESETS.find((p) => p.id === AFTER_DEFAULTS[s.after.length % AFTER_DEFAULTS.length])!
+      return { after: [...s.after, preset.matrix], t: 0, playing: true, playId: s.playId + 1, lastSource: 'inputs' }
+    }),
+  removeAfter: (index) => set((s) => ({ after: s.after.filter((_, k) => k !== index), t: 1, playing: false, lastSource: 'inputs' })),
+  setAfterVector: (index, which, v) =>
+    set((s) => ({
+      after: s.after.map((M, k) => (k === index ? { ...M, [which]: v } : M)),
+      t: 1,
+      playing: false,
+      lastSource: 'inputs',
+    })),
+  applyAfterPreset: (index, id) => {
+    const preset = PRESETS.find((p) => p.id === id)
+    if (!preset) return
+    set((s) => ({
+      after: s.after.map((M, k) => (k === index ? preset.matrix : M)),
+      t: 0,
+      playing: true,
+      playId: s.playId + 1,
+      lastSource: 'preset',
+    }))
+  },
+  // Same matrices, opposite order: usually a different result. Order matters.
+  reverseChain: () =>
+    set((s) => {
+      const [first, ...rest] = [...chainOf(s.A, s.after)].reverse()
+      return { A: first, after: rest, t: 0, playing: true, playId: s.playId + 1, lastSource: 'inputs' }
     }),
 
   replay: () => set((s) => ({ t: 0, playing: true, playId: s.playId + 1 })),

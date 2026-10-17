@@ -30,6 +30,10 @@ const STEPS: { title: string; body: ReactNode }[] = [
     body: 'Each block in the Math panel states the result in words first, then shows the calculation: the kind of transformation, the determinant, eigenvectors and the inverse.',
   },
   {
+    title: 'Chain transformations',
+    body: 'In Composition, add matrix B (and C, D, …). Replay shows A, then B on top of it, then C. Multiplying matrices is just applying them one after another.',
+  },
+  {
     title: 'Edit the code',
     body: 'Change a number in the NumPy panel and the canvas updates as you type. Press Run to check the result in real Python.',
   },
@@ -59,6 +63,15 @@ const FEATURES: { group: string; items: ReactNode[] }[] = [
   {
     group: 'Presets',
     items: ['Identity, Rotate 90°, Shear, Scale ×2, Stretch, Reflect, Projection, Singular (det = 0) and a General matrix.'],
+  },
+  {
+    group: 'Composition',
+    items: [
+      'Add matrices after A (B, C, D, E, F) to apply them one after another. The whole chain is a single matrix, like CBA.',
+      'The animation plays each stage in turn: I → A → B → C, with each letter marked on the slider.',
+      'The Math panel follows î and ĵ through the chain, shows why order matters, and multiplies the determinants.',
+      '“Reverse order” applies the same matrices backwards, usually giving a different result.',
+    ],
   },
   {
     group: 'Inputs',
