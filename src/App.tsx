@@ -1,27 +1,50 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import { Canvas } from './components/Canvas'
 import { CodePanel } from './components/CodePanel'
 import { MathPanel } from './components/MathPanel'
+import { Pane } from './components/Pane'
 import { Tex } from './components/Tex'
+import { ThemeSwitch } from './components/ThemeSwitch'
+import { Credits } from './components/Credits'
+import { Guide } from './components/Guide'
 import { PlayIcon, Sidebar } from './components/Sidebar'
 import { matApprox } from './lib/linalg'
 import { PRESETS } from './lib/presets'
 import { ihat, jhat } from './lib/tex'
+import { useLayout } from './state/layout'
+import { useRoute } from './state/route'
 import { useScene, type Toggles } from './state/store'
-import { toHex, usePalette, useTheme, type ThemeMode } from './state/theme'
+import { toHex, usePalette } from './state/theme'
 import { useAnimation } from './state/useAnimation'
 
 /**
  * xl: inputs | canvas | math + code, all on screen at once.
  * md: canvas | one scrolling column. Mobile: everything stacked, canvas first.
+ * Either side column can be collapsed so the canvas takes the space.
  */
 export function App() {
+  return useRoute() === 'guide' ? <Guide /> : <Workspace />
+}
+
+function Workspace() {
   useAnimation()
+  const leftOpen = useLayout((s) => s.leftOpen)
+  const rightOpen = useLayout((s) => s.rightOpen)
+  const anySide = leftOpen || rightOpen
+
+  const columns = {
+    '--left': leftOpen ? 'minmax(280px,320px)' : '0px',
+    '--right': rightOpen ? 'minmax(360px,440px)' : '0px',
+    '--side': anySide ? 'minmax(320px,380px)' : '0px',
+  } as CSSProperties
 
   return (
     <div className="flex h-full flex-col">
       <Header />
-      <main className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto md:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] md:overflow-hidden xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)_minmax(360px,440px)]">
+      <main
+        style={columns}
+        className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto md:grid-cols-[minmax(0,1fr)_var(--side)] md:overflow-hidden xl:grid-cols-[var(--left)_minmax(0,1fr)_var(--right)]"
+      >
         <div className="flex h-[70svh] min-h-[420px] min-w-0 flex-col md:h-auto md:min-h-0 xl:col-start-2 xl:row-start-1">
           <div className="min-h-0 flex-1">
             <Canvas />
@@ -29,15 +52,34 @@ export function App() {
           <Controls />
         </div>
         {/* md: one scrolling column on the right. xl: `contents` lets both children become their own grid columns. */}
-        <div className="flex min-w-0 flex-col bg-panel md:min-h-0 md:overflow-y-auto md:border-l md:border-rule xl:contents">
-          <Sidebar />
-          <div className="flex min-w-0 flex-col bg-panel xl:col-start-3 xl:row-start-1 xl:min-h-0 xl:border-l xl:border-rule">
-            <div className="border-b border-rule xl:min-h-0 xl:flex-[1.2] xl:overflow-y-auto">
+        <div
+          className={`min-w-0 flex-col bg-panel md:min-h-0 md:overflow-y-auto md:border-l md:border-rule xl:contents ${anySide ? 'flex' : 'hidden'}`}
+        >
+          {leftOpen && (
+            <Pane
+              id="inputs"
+              title="Inputs"
+              readable
+              className="border-b border-rule xl:col-start-1 xl:row-start-1 xl:border-r xl:border-b-0"
+              bodyClassName="xl:overflow-y-auto"
+              footer={<Credits />}
+            >
+              <Sidebar />
+            </Pane>
+          )}
+          <div
+            className={`min-w-0 flex-col bg-panel xl:col-start-3 xl:row-start-1 xl:min-h-0 xl:border-l xl:border-rule ${rightOpen ? 'flex' : 'hidden'}`}
+          >
+            <Pane
+              id="math"
+              title="Math"
+              readable
+              className="border-b border-rule xl:flex-[1.2]"
+              bodyClassName="xl:overflow-y-auto"
+            >
               <MathPanel />
-            </div>
-            <div className="h-[480px] xl:h-auto xl:min-h-0 xl:flex-1">
-              <CodePanel />
-            </div>
+            </Pane>
+            <CodePanel className="h-[520px] xl:h-auto xl:flex-1" />
           </div>
         </div>
       </main>
@@ -64,56 +106,46 @@ function Header() {
           </button>
         ))}
       </nav>
-      <ThemeSwitch />
+      <div className="ml-auto flex items-center gap-2">
+        <a href="#guide" className="btn">
+          How to use
+        </a>
+        <ColumnToggles />
+        <ThemeSwitch />
+      </div>
     </header>
   )
 }
 
-const THEME_OPTIONS: { mode: ThemeMode; label: string; icon: ReactNode }[] = [
-  {
-    mode: 'system',
-    label: 'Match system',
-    icon: (
-      <>
-        <rect x="1.5" y="2.5" width="11" height="7.5" rx="1" />
-        <path d="M5 12.5h4" />
-      </>
-    ),
-  },
-  {
-    mode: 'light',
-    label: 'Light',
-    icon: (
-      <>
-        <circle cx="7" cy="7" r="2.5" />
-        <path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.8 2.8l1 1M10.2 10.2l1 1M2.8 11.2l1-1M10.2 3.8l1-1" />
-      </>
-    ),
-  },
-  { mode: 'dark', label: 'Dark', icon: <path d="M11.5 8.5A5 5 0 0 1 5.5 2.5a5 5 0 1 0 6 6z" /> },
-]
-
-function ThemeSwitch() {
-  const mode = useTheme((s) => s.mode)
-  const setMode = useTheme((s) => s.setMode)
+function ColumnToggles() {
+  const leftOpen = useLayout((s) => s.leftOpen)
+  const rightOpen = useLayout((s) => s.rightOpen)
+  const toggleLeft = useLayout((s) => s.toggleLeft)
+  const toggleRight = useLayout((s) => s.toggleRight)
   return (
-    <div role="radiogroup" aria-label="Theme" className="ml-auto flex rounded-[3px] border border-rule p-0.5">
-      {THEME_OPTIONS.map((o) => (
-        <button
-          key={o.mode}
-          role="radio"
-          aria-checked={mode === o.mode}
-          aria-label={o.label}
-          title={o.label}
-          onClick={() => setMode(o.mode)}
-          className="grid size-7 place-items-center rounded-[2px] text-ink-3 transition-colors hover:text-ink aria-checked:bg-ink aria-checked:text-paper"
-        >
-          <svg viewBox="0 0 14 14" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            {o.icon}
-          </svg>
-        </button>
-      ))}
+    <div className="flex rounded-[3px] border border-rule p-0.5">
+      <PanelToggle side="left" open={leftOpen} onClick={toggleLeft} label="inputs panel" />
+      <PanelToggle side="right" open={rightOpen} onClick={toggleRight} label="math and code panel" />
     </div>
+  )
+}
+
+function PanelToggle({ side, open, onClick, label }: { side: 'left' | 'right'; open: boolean; onClick: () => void; label: string }) {
+  const x = side === 'left' ? 1.5 : 8.5
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={open}
+      aria-label={`${open ? 'Hide' : 'Show'} ${label}`}
+      title={`${open ? 'Hide' : 'Show'} ${label}`}
+      className="grid size-7 place-items-center rounded-[2px] text-ink-3 transition-colors hover:text-ink aria-pressed:text-ink"
+    >
+      <svg viewBox="0 0 14 14" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" aria-hidden>
+        <rect x="1.5" y="2.5" width="11" height="9" rx="1" />
+        <path d={side === 'left' ? 'M5.5 2.5v9' : 'M8.5 2.5v9'} />
+        {open && <rect x={x} y="2.5" width="4" height="9" fill="currentColor" stroke="none" opacity={0.35} />}
+      </svg>
+    </button>
   )
 }
 

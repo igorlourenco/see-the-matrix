@@ -17,6 +17,7 @@ import { generateCode } from '../lib/codegen'
 import { parseCode } from '../lib/parser'
 import type { RunResult } from '../lib/python'
 import { useScene } from '../state/store'
+import { Pane } from './Pane'
 
 const notebookTheme = EditorView.theme({
   '&': { backgroundColor: 'transparent', color: 'var(--ink)', fontSize: '13px', height: '100%' },
@@ -49,7 +50,7 @@ const PARSE_DELAY_MS = 250
 
 type RunState = { status: 'idle' | 'running' } | ({ status: 'done' } & RunResult)
 
-export function CodePanel() {
+export function CodePanel({ className = '' }: { className?: string }) {
   // A selector returning a string: zustand compares by value, so this only
   // re-renders when the code would actually change (not on every animation frame).
   const generated = useScene((s) =>
@@ -102,11 +103,14 @@ export function CodePanel() {
 
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-3 border-b border-rule px-5 py-2.5">
-        <h2 className="font-display text-[15px] font-semibold tracking-tight text-ink">NumPy</h2>
-        <SyncBadge error={parseError} />
-        <button
+    <Pane
+      id="code"
+      title="NumPy"
+      className={className}
+      actions={
+        <>
+          <SyncBadge error={parseError} />
+          <button
           onClick={() => {
             useScene.setState({ lastSource: 'inputs' })
             setDoc(generated)
@@ -119,8 +123,10 @@ export function CodePanel() {
         </button>
         <button onClick={onRun} disabled={run.status === 'running'} className="btn btn-primary">
           {run.status === 'running' ? 'Running…' : 'Run'}
-        </button>
-      </div>
+          </button>
+        </>
+      }
+    >
 
       <div className="min-h-0 flex-1 overflow-auto">
         <CodeMirror
@@ -134,7 +140,7 @@ export function CodePanel() {
       </div>
 
       <Output run={run} />
-    </div>
+    </Pane>
   )
 }
 

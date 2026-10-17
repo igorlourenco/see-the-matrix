@@ -6,10 +6,10 @@ import { ColumnReadout, ColumnVector, Section, VecName } from './inputs'
 
 export function Sidebar() {
   return (
-    <aside className="flex flex-col border-rule bg-panel xl:col-start-1 xl:row-start-1 xl:min-h-0 xl:overflow-y-auto xl:border-r">
+    <>
       <BasisSection />
       <VectorsSection />
-    </aside>
+    </>
   )
 }
 
