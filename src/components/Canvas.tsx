@@ -123,7 +123,7 @@ export function Canvas() {
         ref={svgRef}
         width={size.w}
         height={size.h}
-        className={`block touch-none select-none ${dragging ? 'cursor-grabbing' : ''}`}
+        className={`absolute inset-0 block select-none ${dragging ? 'cursor-grabbing' : ''}`}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
@@ -409,7 +409,7 @@ function Handle({ at, onPointerDown }: { at: Vec2; onPointerDown: (e: ReactPoint
       cx={at[0]}
       cy={at[1]}
       r={13}
-      className="cursor-grab fill-white/0 transition-colors hover:fill-white/15"
+      className="cursor-grab touch-none fill-white/0 transition-colors hover:fill-white/15"
       onPointerDown={onPointerDown}
     />
   )

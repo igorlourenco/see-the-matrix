@@ -6,7 +6,7 @@ import { ColumnReadout, ColumnVector, Section } from './inputs'
 
 export function Sidebar() {
   return (
-    <aside className="flex flex-col overflow-y-auto border-line bg-panel lg:border-r">
+    <aside className="flex flex-col border-line bg-panel xl:col-start-1 xl:row-start-1 xl:min-h-0 xl:overflow-y-auto xl:border-r">
       <BasisSection />
       <VectorsSection />
     </aside>
@@ -77,7 +77,7 @@ function VectorsSection() {
             <button
               onClick={() => removeVector(v.id)}
               aria-label={`Remove ${v.name}`}
-              className="ml-auto rounded px-1.5 text-slate-500 opacity-0 group-hover:opacity-100 hover:text-slate-200 focus:opacity-100"
+              className="ml-auto rounded px-1.5 text-slate-500 hover:text-slate-200 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus:opacity-100"
             >
               ✕
             </button>

@@ -9,14 +9,14 @@
  *     So we skip regeneration when `lastSource === 'code'`.
  */
 import { python } from '@codemirror/lang-python'
-import CodeMirror from '@uiw/react-codemirror'
+import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { useEffect, useRef, useState } from 'react'
 import { generateCode } from '../lib/codegen'
 import { parseCode } from '../lib/parser'
 import type { RunResult } from '../lib/python'
 import { useScene } from '../state/store'
 
-const extensions = [python()]
+const extensions = [python(), EditorView.lineWrapping]
 const PARSE_DELAY_MS = 250
 
 type RunState = { status: 'idle' | 'running' } | ({ status: 'done' } & RunResult)
@@ -112,10 +112,12 @@ export function CodePanel() {
 
 function SyncBadge({ error }: { error: { line: number; error: string } | null }) {
   if (!error) {
-    return <span className="text-xs text-emerald-400/80">● live: edit values to update the scene</span>
+    return <span className="min-w-0 truncate text-xs text-emerald-400/80" title="Edit values in the code to update the scene">
+        ● live sync
+      </span>
   }
   return (
-    <span className="truncate text-xs text-amber-400" title={error.error}>
+    <span className="min-w-0 truncate text-xs text-amber-400" title={error.error}>
       ● line {error.line}: {error.error}
     </span>
   )

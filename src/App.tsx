@@ -7,8 +7,8 @@ import { useScene, type Toggles } from './state/store'
 import { useAnimation } from './state/useAnimation'
 
 /**
- * Layout: inputs | canvas | math + code. All three views on screen at once,
- * because the point is seeing them change together.
+ * xl: inputs | canvas | math + code, all on screen at once.
+ * md: canvas | one scrolling column. Mobile: everything stacked, canvas first.
  */
 export function App() {
   useAnimation()
@@ -16,20 +16,23 @@ export function App() {
   return (
     <div className="flex h-full flex-col">
       <Header />
-      <main className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(300px,340px)_1fr_minmax(380px,460px)] lg:overflow-hidden">
-        <Sidebar />
-        <div className="flex min-h-[60vh] flex-col lg:min-h-0">
+      <main className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto md:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] md:overflow-hidden xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)_minmax(360px,440px)]">
+        <div className="flex h-[70svh] min-h-[420px] min-w-0 flex-col md:h-auto md:min-h-0 xl:col-start-2 xl:row-start-1">
           <div className="min-h-0 flex-1">
             <Canvas />
           </div>
           <Controls />
         </div>
-        <div className="flex min-h-0 flex-col border-line bg-panel lg:border-l">
-          <div className="min-h-0 overflow-y-auto border-b border-line lg:flex-[1.2]">
-            <MathPanel />
-          </div>
-          <div className="h-[480px] min-h-0 lg:h-auto lg:flex-1">
-            <CodePanel />
+        {/* md: one scrolling column on the right. xl: `contents` lets both children become their own grid columns. */}
+        <div className="flex min-w-0 flex-col bg-panel md:min-h-0 md:overflow-y-auto md:border-l md:border-line xl:contents">
+          <Sidebar />
+          <div className="flex min-w-0 flex-col bg-panel xl:col-start-3 xl:row-start-1 xl:min-h-0 xl:border-l xl:border-line">
+            <div className="border-b border-line xl:min-h-0 xl:flex-[1.2] xl:overflow-y-auto">
+              <MathPanel />
+            </div>
+            <div className="h-[480px] xl:h-auto xl:min-h-0 xl:flex-1">
+              <CodePanel />
+            </div>
           </div>
         </div>
       </main>
@@ -47,7 +50,7 @@ function Header() {
           A = [ <span className="text-ihat">î</span> <span className="text-jhat">ĵ</span> ]
         </span>
       </h1>
-      <nav className="flex flex-wrap gap-1.5" aria-label="Presets">
+      <nav className="flex max-w-full gap-1.5 overflow-x-auto md:flex-wrap" aria-label="Presets">
         {PRESETS.map((p) => (
           <button key={p.id} onClick={() => applyPreset(p.id)} className="btn">
             {p.label}
