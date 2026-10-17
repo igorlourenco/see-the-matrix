@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+
+@theme {
+  /* 3Blue1Brown's convention: î is green, ĵ is red. */
+  --color-ihat: #83c167;
+  --color-jhat: #fc6255;
+  --color-ink: #0e1015;
+  --color-panel: #151821;
+  --color-line: #262b38;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: #d7dbe4;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.katex {
+  font-size: 1.05em;
+}
+
+/* KaTeX display blocks overflow on narrow panels: scroll instead of clipping. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+  margin: 0.4em 0;
+}
+
+@layer components {
+  .btn {
+    @apply rounded-md border border-line bg-white/5 px-2.5 py-1 text-xs font-medium whitespace-nowrap text-slate-200 transition-colors hover:bg-white/10 disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-sky-500/50 bg-sky-500/20 text-sky-100 hover:bg-sky-500/30;
+  }
+}
+
+/* Let CodeMirror fill its panel. */
+.cm-editor {
+  background: transparent !important;
+}
+.cm-gutters {
+  background: transparent !important;
+  border-right: 1px solid var(--color-line) !important;
+}
